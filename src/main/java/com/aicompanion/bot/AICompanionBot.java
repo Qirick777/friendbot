@@ -27,6 +27,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotRangedCombat();
     private final com.aicompanion.bot.combat.BotSurvival survival =
             new com.aicompanion.bot.combat.BotSurvival();
+    private final com.aicompanion.bot.combat.BotReflex reflex =
+            new com.aicompanion.bot.combat.BotReflex();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -52,6 +54,11 @@ public class AICompanionBot extends ServerPlayer {
         return survival;
     }
 
+    /** Reflex layer (T4.2). */
+    public com.aicompanion.bot.combat.BotReflex reflex() {
+        return reflex;
+    }
+
     /** Tactical movement executor (T2.1). */
     public BotMovementController mover() {
         return mover;
@@ -72,10 +79,17 @@ public class AICompanionBot extends ServerPlayer {
         // Perception (T3.1): snapshot all facts first, so every layer sees the same tick.
         perception.gather(this);
         // Phase 3+ inserts: reflex → decision here (consume perception).
-        // Survival (T4.1) has top priority (design 8.1 "위가 이긴다"): if a health-driven survival
+        // Reflex layer (T4.2) runs first (design ch.7 "판단보다 먼저, 매 틱 최우선"). R0 totem
+        // pre-equip never blocks; R1 shield/sidestep owns movement for the tick when it fires.
+        reflex.tickR0(this);
+        boolean evading = reflex.tickR1(this);
+
+        // Survival (T4.1) has next priority (design 8.1 "위가 이긴다"): if a health-driven survival
         // mode is active, it overrides combat and movement this tick.
-        boolean survivalActive = survival.tick(this);
-        if (survivalActive) {
+        boolean survivalActive = !evading && survival.tick(this);
+        if (evading) {
+            // reflex.tickR1 already drove movement (shield up / sidestep).
+        } else if (survivalActive) {
             // survival.tick already drove movement inputs / item use / pearl throw.
         } else if (meleeCombat.hasTarget()) {
             // Melee combat (T3.3) drives movement inputs directly (no A*/mover).
@@ -101,8 +115,8 @@ public class AICompanionBot extends ServerPlayer {
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
         // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
         // aim (xRot/yaw) itself — the look controller must not fight it, so skip it while shooting.
-        // Survival also owns rotation (facing/away from the threat) when active.
-        if (!rangedCombat.hasTarget() && !survivalActive) {
+        // Survival and reflex also own rotation (facing/away from the threat) when active.
+        if (!rangedCombat.hasTarget() && !survivalActive && !evading) {
             look.tick(this);
         }
     }

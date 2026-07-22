@@ -2,6 +2,7 @@ package com.aicompanion.test;
 
 import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotDeathTest;
+import com.aicompanion.test.tests.BotDodgeTest;
 import com.aicompanion.test.tests.BotLookTest;
 import com.aicompanion.test.tests.BotMeleeTest;
 import com.aicompanion.test.tests.BotMoveFlatTest;
@@ -16,7 +17,9 @@ import com.aicompanion.test.tests.BotSurvivalTest;
 import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
+import com.aicompanion.test.tests.BotShieldTest;
 import com.aicompanion.test.tests.BotSingleTest;
+import com.aicompanion.test.tests.BotTotemTest;
 import com.aicompanion.test.tests.DummyTest;
 
 import java.util.LinkedHashMap;
@@ -63,6 +66,10 @@ public final class BotTestRegistry {
         // T4.1 survival state machine.
         register("bot_survival", BotSurvivalTest::new);
         register("bot_pearl", BotPearlTest::new);
+        // T4.2 reflex layer.
+        register("bot_totem", BotTotemTest::new);
+        register("bot_dodge", BotDodgeTest::new);
+        register("bot_shield", BotShieldTest::new);
     }
 
     private BotTestRegistry() {
