@@ -9,8 +9,10 @@ import com.aicompanion.test.tests.BotMoveStairTest;
 import com.aicompanion.test.tests.BotPathBlockedTest;
 import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
+import com.aicompanion.test.tests.BotPearlTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
 import com.aicompanion.test.tests.BotRangedTest;
+import com.aicompanion.test.tests.BotSurvivalTest;
 import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
@@ -58,6 +60,9 @@ public final class BotTestRegistry {
         register("bot_melee", BotMeleeTest::new);
         // T3.4 ranged combat.
         register("bot_ranged", BotRangedTest::new);
+        // T4.1 survival state machine.
+        register("bot_survival", BotSurvivalTest::new);
+        register("bot_pearl", BotPearlTest::new);
     }
 
     private BotTestRegistry() {

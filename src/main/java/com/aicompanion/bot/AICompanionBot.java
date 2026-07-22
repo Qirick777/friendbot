@@ -25,6 +25,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotMeleeCombat();
     private final com.aicompanion.bot.combat.BotRangedCombat rangedCombat =
             new com.aicompanion.bot.combat.BotRangedCombat();
+    private final com.aicompanion.bot.combat.BotSurvival survival =
+            new com.aicompanion.bot.combat.BotSurvival();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -43,6 +45,11 @@ public class AICompanionBot extends ServerPlayer {
     /** Predictive ranged combat (T3.4). */
     public com.aicompanion.bot.combat.BotRangedCombat rangedCombat() {
         return rangedCombat;
+    }
+
+    /** Survival state machine (T4.1). */
+    public com.aicompanion.bot.combat.BotSurvival survival() {
+        return survival;
     }
 
     /** Tactical movement executor (T2.1). */
@@ -65,7 +72,12 @@ public class AICompanionBot extends ServerPlayer {
         // Perception (T3.1): snapshot all facts first, so every layer sees the same tick.
         perception.gather(this);
         // Phase 3+ inserts: reflex → decision here (consume perception).
-        if (meleeCombat.hasTarget()) {
+        // Survival (T4.1) has top priority (design 8.1 "위가 이긴다"): if a health-driven survival
+        // mode is active, it overrides combat and movement this tick.
+        boolean survivalActive = survival.tick(this);
+        if (survivalActive) {
+            // survival.tick already drove movement inputs / item use / pearl throw.
+        } else if (meleeCombat.hasTarget()) {
             // Melee combat (T3.3) drives movement inputs directly (no A*/mover).
             meleeCombat.tick(this);
         } else if (rangedCombat.hasTarget()) {
@@ -89,7 +101,8 @@ public class AICompanionBot extends ServerPlayer {
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
         // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
         // aim (xRot/yaw) itself — the look controller must not fight it, so skip it while shooting.
-        if (!rangedCombat.hasTarget()) {
+        // Survival also owns rotation (facing/away from the threat) when active.
+        if (!rangedCombat.hasTarget() && !survivalActive) {
             look.tick(this);
         }
     }

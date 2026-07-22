@@ -222,6 +222,23 @@ public final class BotCommand {
                     ctx.getSource().sendSuccess(() -> Component.literal("[BOT] ranged stopped"), false);
                     return 1;
                 }))
+                // T4.1 survival state dump.
+                .then(Commands.literal("survival").executes(ctx -> {
+                    CommandSourceStack src = ctx.getSource();
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        src.sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    float hpFrac = bot.getHealth() / bot.getMaxHealth();
+                    String dump = String.format("[SURVIVAL] mode=%s hp=%.1f/%.1f (%.0f%%) critical=%b pearlTp=%b(%s)",
+                            bot.survival().mode(), bot.getHealth(), bot.getMaxHealth(), hpFrac * 100,
+                            bot.survival().isCritical(bot), bot.survival().pearlTeleportConfirmed(),
+                            bot.survival().pearlMechanism());
+                    LOGGER.info("{}", dump);
+                    src.sendSuccess(() -> Component.literal(dump), false);
+                    return 1;
+                }))
                 // T3.2 tactical-judgment dump.
                 .then(Commands.literal("tactics").executes(ctx -> {
                     CommandSourceStack src = ctx.getSource();
