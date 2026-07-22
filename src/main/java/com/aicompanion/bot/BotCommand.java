@@ -4,16 +4,20 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.logging.LogUtils;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
 
 /**
  * Dev summon command (T1.1 "임시 소환 수단"):
  * {@code /bot spawn} | {@code /bot despawn} | {@code /bot info}. Requires permission level 2.
  */
 public final class BotCommand {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private BotCommand() {
     }
@@ -149,6 +153,19 @@ public final class BotCommand {
                     bot.planner().stop();
                     bot.mover().stop();
                     ctx.getSource().sendSuccess(() -> Component.literal("[BOT] path stopped"), false);
+                    return 1;
+                }))
+                // T3.1 perception dump.
+                .then(Commands.literal("perception").executes(ctx -> {
+                    CommandSourceStack src = ctx.getSource();
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        src.sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    String dump = bot.perception().dump();
+                    LOGGER.info("{}", dump);
+                    src.sendSuccess(() -> Component.literal(dump), false);
                     return 1;
                 })));
     }

@@ -19,9 +19,16 @@ public class AICompanionBot extends ServerPlayer {
     private final BotMovementController mover = new BotMovementController();
     private final BotLookController look = new BotLookController();
     private final BotPathPlanner planner = new BotPathPlanner();
+    private final com.aicompanion.bot.perception.Perception perception =
+            new com.aicompanion.bot.perception.Perception();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
+    }
+
+    /** Perception layer (T3.1). */
+    public com.aicompanion.bot.perception.Perception perception() {
+        return perception;
     }
 
     /** Tactical movement executor (T2.1). */
@@ -41,7 +48,9 @@ public class AICompanionBot extends ServerPlayer {
 
     @Override
     public void tick() {
-        // Phase 3+ inserts: perception.gather → reflex → decision here.
+        // Perception (T3.1): snapshot all facts first, so every layer sees the same tick.
+        perception.gather(this);
+        // Phase 3+ inserts: reflex → decision here (consume perception).
         // Strategic layer: A* planner picks the next node → sets the movement target.
         planner.tick(this);
         // Action layer: set movement inputs before the physics tick consumes them.
