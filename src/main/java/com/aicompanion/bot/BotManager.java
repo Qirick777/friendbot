@@ -12,6 +12,8 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
@@ -75,9 +77,17 @@ public final class BotManager {
         return current != null && !current.isRemoved();
     }
 
-    /** Spawn the single bot at pos. Returns the bot, or null if one already exists. */
+    /**
+     * Fresh summon (egg / dev command): a new bot with full health and empty inventory,
+     * even if stale playerdata from a previous (e.g. dead) bot is on disk.
+     */
     @Nullable
     public static AICompanionBot spawn(MinecraftServer server, ServerLevel level, BlockPos pos) {
+        return spawnInternal(server, level, pos, true);
+    }
+
+    @Nullable
+    private static AICompanionBot spawnInternal(MinecraftServer server, ServerLevel level, BlockPos pos, boolean fresh) {
         if (exists()) {
             LOGGER.warn("[BOT] spawn refused — bot already exists (uuid={})", current.getUUID());
             return null;
@@ -90,15 +100,83 @@ public final class BotManager {
         // Dummy connection with an outbound-discarding EmbeddedChannel (see openDummyChannel).
         Connection connection = new Connection(PacketFlow.CLIENTBOUND);
         botChannel = openDummyChannel(connection);
+        // placeNewPlayer.load() applies any saved playerdata (position/inventory/health).
         server.getPlayerList().placeNewPlayer(connection, bot);
+        bot.setGameMode(GameType.SURVIVAL);
+
+        if (fresh) {
+            // A brand-new summon must not inherit a prior (possibly dead) bot's saved state.
+            bot.getInventory().clearContent();
+            bot.setHealth(bot.getMaxHealth());
+            bot.getFoodData().setFoodLevel(20);
+            bot.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0.0F, 0.0F);
+        }
 
         current = bot;
+        // Record existence (single source of truth) + fixed UUID.
+        BotWorldData.get(server).set(true, BOT_UUID);
 
         int idx = Math.floorMod(BOT_UUID.hashCode(), 18);
-        LOGGER.info("[BOT] spawned name={} uuid={} pos=({},{},{}) skinModel={} idx={}",
-                BOT_NAME, BOT_UUID, pos.getX(), pos.getY(), pos.getZ(),
+        LOGGER.info("[BOT] spawned name={} uuid={} pos=({},{},{}) fresh={} skinModel={} idx={}",
+                BOT_NAME, BOT_UUID, pos.getX(), pos.getY(), pos.getZ(), fresh,
                 idx <= 8 ? "slim(alex)" : "wide", idx);
         return bot;
+    }
+
+    /**
+     * Restore the bot on world load (design "복원"): if {@link BotWorldData#botExists()},
+     * re-run the residency plumbing so the saved playerdata (position/inventory/equipment)
+     * is reloaded via {@code placeNewPlayer}. No-op if the record says the bot doesn't exist.
+     */
+    public static void restore(MinecraftServer server) {
+        if (exists()) {
+            return;
+        }
+        BotWorldData data = BotWorldData.get(server);
+        if (!data.botExists()) {
+            LOGGER.info("[BOT] restore skipped — no bot recorded");
+            return;
+        }
+        ServerLevel level = server.overworld();
+        // fresh=false: keep the saved playerdata (position/inventory/equipment) from disk.
+        AICompanionBot bot = spawnInternal(server, level, level.getSharedSpawnPos(), false);
+        if (bot != null) {
+            LOGGER.info("[BOT] restored uuid={} pos={} food={}",
+                    bot.getUUID(), bot.blockPosition(), bot.getFoodData().getFoodLevel());
+        }
+    }
+
+    /**
+     * Spawn-egg entry point (design "스폰 에그(소모형)"): if no bot exists, spawn and consume
+     * one egg. If a bot already exists, refuse (the single constraint). Returns true iff a bot
+     * was spawned and an egg consumed.
+     */
+    public static boolean eggSpawn(ServerLevel level, BlockPos pos, ItemStack egg) {
+        MinecraftServer server = level.getServer();
+        if (BotWorldData.get(server).botExists() || exists()) {
+            return false; // refused — caller shows the message
+        }
+        AICompanionBot bot = spawn(server, level, pos);
+        if (bot == null) {
+            return false;
+        }
+        egg.shrink(1); // consume one egg
+        return true;
+    }
+
+    /**
+     * Death release (design "사망"): the bot entity is gone; clear the residency reference,
+     * close the dummy channel, and mark the record so a new egg is required to re-summon.
+     * Inventory dropping is handled by the death hook before this runs.
+     */
+    public static void onDeathRelease(MinecraftServer server) {
+        BotWorldData.get(server).set(false, null);
+        current = null;
+        if (botChannel != null) {
+            botChannel.close();
+            botChannel = null;
+        }
+        LOGGER.info("[BOT] death release — botExists=false");
     }
 
     /** Remove the bot from the world. Returns true if one was removed. */
@@ -108,6 +186,7 @@ public final class BotManager {
         }
         server.getPlayerList().remove(current);
         LOGGER.info("[BOT] despawned uuid={}", current.getUUID());
+        BotWorldData.get(server).set(false, null);
         current = null;
         if (botChannel != null) {
             botChannel.close();

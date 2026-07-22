@@ -1,6 +1,8 @@
 package com.aicompanion;
 
+import com.aicompanion.bot.ModItems;
 import com.mojang.logging.LogUtils;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -22,8 +24,9 @@ public class AICompanionMod {
         // Emitted at construction so it shows up regardless of physical side.
         LOGGER.info("[BOTLOAD] {} mod loaded", MOD_ID);
 
-        FMLJavaModLoadingContext.get().getModEventBus()
-                .addListener(this::commonSetup);
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        ModItems.ITEMS.register(modEventBus); // register the bot spawn egg
+        modEventBus.addListener(this::commonSetup);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

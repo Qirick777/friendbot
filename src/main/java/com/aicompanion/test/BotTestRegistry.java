@@ -1,6 +1,10 @@
 package com.aicompanion.test;
 
 import com.aicompanion.test.tests.BotAliveTest;
+import com.aicompanion.test.tests.BotDeathTest;
+import com.aicompanion.test.tests.BotPersistLoadTest;
+import com.aicompanion.test.tests.BotPersistSaveTest;
+import com.aicompanion.test.tests.BotSingleTest;
 import com.aicompanion.test.tests.DummyTest;
 
 import java.util.LinkedHashMap;
@@ -21,6 +25,11 @@ public final class BotTestRegistry {
         register("dummy", DummyTest::new);
         // T1.1 resident fake-player.
         register("bot_alive", BotAliveTest::new);
+        // T1.2 lifecycle.
+        register("bot_single", BotSingleTest::new);
+        register("bot_death", BotDeathTest::new);
+        register("bot_persist_save", BotPersistSaveTest::new);
+        register("bot_persist_load", BotPersistLoadTest::new);
     }
 
     private BotTestRegistry() {
