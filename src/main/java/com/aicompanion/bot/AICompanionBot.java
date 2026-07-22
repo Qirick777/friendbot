@@ -29,6 +29,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotSurvival();
     private final com.aicompanion.bot.combat.BotReflex reflex =
             new com.aicompanion.bot.combat.BotReflex();
+    private final com.aicompanion.bot.combat.BotProtection protection =
+            new com.aicompanion.bot.combat.BotProtection();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -59,6 +61,11 @@ public class AICompanionBot extends ServerPlayer {
         return reflex;
     }
 
+    /** User-protection protocol (T4.3). */
+    public com.aicompanion.bot.combat.BotProtection protection() {
+        return protection;
+    }
+
     /** Tactical movement executor (T2.1). */
     public BotMovementController mover() {
         return mover;
@@ -87,6 +94,14 @@ public class AICompanionBot extends ServerPlayer {
         // Survival (T4.1) has next priority (design 8.1 "위가 이긴다"): if a health-driven survival
         // mode is active, it overrides combat and movement this tick.
         boolean survivalActive = !evading && survival.tick(this);
+
+        // User protection (T4.3): top-level coordinator below reflex/survival, above combat. It
+        // selects which enemy to engage (or follow/heal/flee) and hands it to the combat controllers,
+        // which run in the branches below. Inert when there is no user.
+        if (!evading && !survivalActive) {
+            protection.tick(this);
+        }
+
         if (evading) {
             // reflex.tickR1 already drove movement (shield up / sidestep).
         } else if (survivalActive) {

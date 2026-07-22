@@ -12,6 +12,8 @@ import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
 import com.aicompanion.test.tests.BotPearlTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
+import com.aicompanion.test.tests.BotProtectInterveneTest;
+import com.aicompanion.test.tests.BotProtectPriorityTest;
 import com.aicompanion.test.tests.BotRangedTest;
 import com.aicompanion.test.tests.BotSurvivalTest;
 import com.aicompanion.test.tests.BotTacticsTest;
@@ -70,6 +72,9 @@ public final class BotTestRegistry {
         register("bot_totem", BotTotemTest::new);
         register("bot_dodge", BotDodgeTest::new);
         register("bot_shield", BotShieldTest::new);
+        // T4.3 user protection.
+        register("bot_protect_intervene", BotProtectInterveneTest::new);
+        register("bot_protect_priority", BotProtectPriorityTest::new);
     }
 
     private BotTestRegistry() {
