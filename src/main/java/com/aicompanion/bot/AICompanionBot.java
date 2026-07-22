@@ -18,6 +18,7 @@ public class AICompanionBot extends ServerPlayer {
 
     private final BotMovementController mover = new BotMovementController();
     private final BotLookController look = new BotLookController();
+    private final BotPathPlanner planner = new BotPathPlanner();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -33,9 +34,16 @@ public class AICompanionBot extends ServerPlayer {
         return look;
     }
 
+    /** Strategic path planner (T2.3). */
+    public BotPathPlanner planner() {
+        return planner;
+    }
+
     @Override
     public void tick() {
         // Phase 3+ inserts: perception.gather → reflex → decision here.
+        // Strategic layer: A* planner picks the next node → sets the movement target.
+        planner.tick(this);
         // Action layer: set movement inputs before the physics tick consumes them.
         mover.tick(this);
 

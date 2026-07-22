@@ -3,6 +3,7 @@ package com.aicompanion.bot;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -117,6 +118,37 @@ public final class BotCommand {
                     }
                     bot.look().clear();
                     ctx.getSource().sendSuccess(() -> Component.literal("[BOT] look cleared"), false);
+                    return 1;
+                }))
+                // T2.3 dev pathing commands.
+                .then(Commands.literal("goto")
+                        .then(Commands.argument("x", IntegerArgumentType.integer())
+                                .then(Commands.argument("y", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                .executes(ctx -> {
+                                                    CommandSourceStack src = ctx.getSource();
+                                                    AICompanionBot bot = BotManager.current();
+                                                    if (bot == null) {
+                                                        src.sendFailure(Component.literal("[BOT] no bot"));
+                                                        return 0;
+                                                    }
+                                                    BlockPos g = new BlockPos(
+                                                            IntegerArgumentType.getInteger(ctx, "x"),
+                                                            IntegerArgumentType.getInteger(ctx, "y"),
+                                                            IntegerArgumentType.getInteger(ctx, "z"));
+                                                    bot.planner().setGoal(g);
+                                                    src.sendSuccess(() -> Component.literal("[BOT] goto " + g), false);
+                                                    return 1;
+                                                })))))
+                .then(Commands.literal("pathstop").executes(ctx -> {
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        ctx.getSource().sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    bot.planner().stop();
+                    bot.mover().stop();
+                    ctx.getSource().sendSuccess(() -> Component.literal("[BOT] path stopped"), false);
                     return 1;
                 })));
     }

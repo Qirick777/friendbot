@@ -5,6 +5,8 @@ import com.aicompanion.test.tests.BotDeathTest;
 import com.aicompanion.test.tests.BotLookTest;
 import com.aicompanion.test.tests.BotMoveFlatTest;
 import com.aicompanion.test.tests.BotMoveStairTest;
+import com.aicompanion.test.tests.BotPathBlockedTest;
+import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotSingleTest;
@@ -38,6 +40,9 @@ public final class BotTestRegistry {
         register("bot_move_stair", BotMoveStairTest::new);
         // T2.2 look system.
         register("bot_look", BotLookTest::new);
+        // T2.3 A* pathfinding.
+        register("bot_path_reach", BotPathReachTest::new);
+        register("bot_path_blocked", BotPathBlockedTest::new);
     }
 
     private BotTestRegistry() {
