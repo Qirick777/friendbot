@@ -71,10 +71,11 @@ public class BotMovementController {
         }
 
         // M1: body yaw = move direction (matches Entity.lookAt convention).
+        // getYRot() drives travel() direction; yBodyRot is the visible torso.
+        // Head yaw (yHeadRot) is owned by BotLookController (T2.2) — not set here.
         float yaw = Mth.wrapDegrees((float) (Mth.atan2(dz, dx) * (180.0D / Math.PI)) - 90.0F);
         bot.setYRot(yaw);
         bot.setYBodyRot(yaw);
-        bot.setYHeadRot(yaw);
 
         // M2: forward input; strafe 0 for straight-line travel.
         bot.zza = FORWARD;

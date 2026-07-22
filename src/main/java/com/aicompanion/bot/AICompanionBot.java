@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class AICompanionBot extends ServerPlayer {
 
     private final BotMovementController mover = new BotMovementController();
+    private final BotLookController look = new BotLookController();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -25,6 +26,11 @@ public class AICompanionBot extends ServerPlayer {
     /** Tactical movement executor (T2.1). */
     public BotMovementController mover() {
         return mover;
+    }
+
+    /** Look control (T2.2). */
+    public BotLookController look() {
+        return look;
     }
 
     @Override
@@ -39,5 +45,9 @@ public class AICompanionBot extends ServerPlayer {
         // (gravity, collision, step-up, friction, hunger, regen).
         super.tick();  // ServerPlayer housekeeping (gameMode, containers, criteria)
         this.doTick(); // Player/LivingEntity tick → aiStep → travel
+
+        // Look control runs last so the head yaw/pitch it writes are the tick's final state
+        // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot).
+        look.tick(this);
     }
 }

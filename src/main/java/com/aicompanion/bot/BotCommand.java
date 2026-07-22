@@ -89,6 +89,35 @@ public final class BotCommand {
                             bot.mover().setCrouch(on);
                             ctx.getSource().sendSuccess(() -> Component.literal("[BOT] crouch=" + on), false);
                             return 1;
-                        }))));
+                        })))
+                // T2.2 dev look commands.
+                .then(Commands.literal("look")
+                        .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                .then(Commands.argument("y", DoubleArgumentType.doubleArg())
+                                        .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                                .executes(ctx -> {
+                                                    CommandSourceStack src = ctx.getSource();
+                                                    AICompanionBot bot = BotManager.current();
+                                                    if (bot == null) {
+                                                        src.sendFailure(Component.literal("[BOT] no bot"));
+                                                        return 0;
+                                                    }
+                                                    double x = DoubleArgumentType.getDouble(ctx, "x");
+                                                    double y = DoubleArgumentType.getDouble(ctx, "y");
+                                                    double z = DoubleArgumentType.getDouble(ctx, "z");
+                                                    bot.look().lookAt(x, y, z);
+                                                    src.sendSuccess(() -> Component.literal("[BOT] look (" + x + "," + y + "," + z + ")"), false);
+                                                    return 1;
+                                                })))))
+                .then(Commands.literal("lookclear").executes(ctx -> {
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        ctx.getSource().sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    bot.look().clear();
+                    ctx.getSource().sendSuccess(() -> Component.literal("[BOT] look cleared"), false);
+                    return 1;
+                })));
     }
 }
