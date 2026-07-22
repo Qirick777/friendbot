@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Forge / MDK generated
+run/
+runs/
+run-data/
+src/generated/resources/.cache/
+
+# ForgeGradle decompiled/userdev caches live under GRADLE_USER_HOME, not tracked
+
+# Local decompiled vanilla sources (reference only; regenerate per DEV_ENV.md)
+.mcp-sources/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.eclipse/
+.settings/
+.classpath
+.project
+bin/
+.vscode/
+
+# OS
+.DS_Store
