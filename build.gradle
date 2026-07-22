@@ -43,6 +43,11 @@ minecraft {
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            // Headless verification: forward -PbottestAuto=<names> as a system property
+            // to the forked server JVM so BotTestHarness can auto-run tests on start.
+            if (project.hasProperty('bottestAuto')) {
+                property 'bottest.auto', project.getProperty('bottestAuto')
+            }
         }
     }
 }

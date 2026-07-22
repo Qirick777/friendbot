@@ -1,0 +1,39 @@
+package com.aicompanion.test;
+
+import com.aicompanion.test.tests.DummyTest;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
+
+/**
+ * Registry of available tests: {@code name → factory}. Later tasks register their
+ * own {@link BotTest} here, so every verification rides on the same harness.
+ */
+public final class BotTestRegistry {
+
+    private static final Map<String, Supplier<BotTest>> TESTS = new LinkedHashMap<>();
+
+    static {
+        // T0.2 harness self-check.
+        register("dummy", DummyTest::new);
+    }
+
+    private BotTestRegistry() {
+    }
+
+    public static void register(String name, Supplier<BotTest> factory) {
+        TESTS.put(name, factory);
+    }
+
+    /** Create a fresh test instance, or null if the name is unknown. */
+    public static BotTest create(String name) {
+        Supplier<BotTest> factory = TESTS.get(name);
+        return factory == null ? null : factory.get();
+    }
+
+    public static Set<String> names() {
+        return TESTS.keySet();
+    }
+}
