@@ -1,8 +1,12 @@
 package com.aicompanion.test;
 
 import com.aicompanion.test.tests.BotAliveTest;
+import com.aicompanion.test.tests.BotCreeperLowFuseTest;
+import com.aicompanion.test.tests.BotCreeperWallTest;
 import com.aicompanion.test.tests.BotDeathTest;
 import com.aicompanion.test.tests.BotDodgeTest;
+import com.aicompanion.test.tests.BotFallNoWaterTest;
+import com.aicompanion.test.tests.BotFallWaterTest;
 import com.aicompanion.test.tests.BotLookTest;
 import com.aicompanion.test.tests.BotMeleeTest;
 import com.aicompanion.test.tests.BotMoveFlatTest;
@@ -75,6 +79,11 @@ public final class BotTestRegistry {
         // T4.3 user protection.
         register("bot_protect_intervene", BotProtectInterveneTest::new);
         register("bot_protect_priority", BotProtectPriorityTest::new);
+        // T4.4 environment manipulation (fall survival + creeper wall).
+        register("bot_fall_water", BotFallWaterTest::new);
+        register("bot_fall_nowater", BotFallNoWaterTest::new);
+        register("bot_creeper_wall", BotCreeperWallTest::new);
+        register("bot_creeper_lowfuse", BotCreeperLowFuseTest::new);
     }
 
     private BotTestRegistry() {

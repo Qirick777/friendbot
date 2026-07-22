@@ -31,6 +31,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotReflex();
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
+    private final com.aicompanion.bot.combat.BotEnvironment environment =
+            new com.aicompanion.bot.combat.BotEnvironment();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -66,6 +68,11 @@ public class AICompanionBot extends ServerPlayer {
         return protection;
     }
 
+    /** Environment manipulation reflex — block placement + fall survival (T4.4). */
+    public com.aicompanion.bot.combat.BotEnvironment environment() {
+        return environment;
+    }
+
     /** Tactical movement executor (T2.1). */
     public BotMovementController mover() {
         return mover;
@@ -91,19 +98,26 @@ public class AICompanionBot extends ServerPlayer {
         reflex.tickR0(this);
         boolean evading = reflex.tickR1(this);
 
+        // Environment reflex (T4.4): fall survival (R2) drops water/blocks under a fatal fall
+        // (no movement ownership); creeper defense places a blast wall or shields+flees.
+        environment.tickFallSurvival(this);
+        boolean creeperActing = environment.tickCreeperDefense(this);
+
         // Survival (T4.1) has next priority (design 8.1 "위가 이긴다"): if a health-driven survival
         // mode is active, it overrides combat and movement this tick.
-        boolean survivalActive = !evading && survival.tick(this);
+        boolean survivalActive = !evading && !creeperActing && survival.tick(this);
 
         // User protection (T4.3): top-level coordinator below reflex/survival, above combat. It
         // selects which enemy to engage (or follow/heal/flee) and hands it to the combat controllers,
         // which run in the branches below. Inert when there is no user.
-        if (!evading && !survivalActive) {
+        if (!evading && !creeperActing && !survivalActive) {
             protection.tick(this);
         }
 
         if (evading) {
             // reflex.tickR1 already drove movement (shield up / sidestep).
+        } else if (creeperActing) {
+            // environment.tickCreeperDefense already drove movement (wall + step / shield + flee).
         } else if (survivalActive) {
             // survival.tick already drove movement inputs / item use / pearl throw.
         } else if (meleeCombat.hasTarget()) {
@@ -124,14 +138,23 @@ public class AICompanionBot extends ServerPlayer {
         // doTick() (normally driven by the network connection). The bot has no connection ticking
         // it, so we drive BOTH here = a full player tick: housekeeping + aiStep/travel physics
         // (gravity, collision, step-up, friction, hunger, regen).
+        double preX = this.getX();
+        double preY = this.getY();
+        double preZ = this.getZ();
         super.tick();  // ServerPlayer housekeeping (gameMode, containers, criteria)
         this.doTick(); // Player/LivingEntity tick → aiStep → travel
+
+        // ServerPlayer.checkFallDamage is an empty no-op; vanilla runs fall damage via
+        // doCheckFallDamage from the CLIENT move packet — which the connection-less bot never
+        // receives. So we drive it ourselves (like doTick) with this tick's actual displacement,
+        // giving the bot genuine fallDistance accumulation and fall damage (and a real R2 trigger).
+        this.doCheckFallDamage(this.getX() - preX, this.getY() - preY, this.getZ() - preZ, this.onGround());
 
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
         // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
         // aim (xRot/yaw) itself — the look controller must not fight it, so skip it while shooting.
         // Survival and reflex also own rotation (facing/away from the threat) when active.
-        if (!rangedCombat.hasTarget() && !survivalActive && !evading) {
+        if (!rangedCombat.hasTarget() && !survivalActive && !evading && !creeperActing) {
             look.tick(this);
         }
     }
