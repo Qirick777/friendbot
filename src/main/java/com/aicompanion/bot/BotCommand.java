@@ -1,6 +1,8 @@
 package com.aicompanion.bot;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -48,6 +50,45 @@ public final class BotCommand {
                             + " pos=" + bot.blockPosition();
                     src.sendSuccess(() -> Component.literal(info), false);
                     return 1;
-                })));
+                }))
+                // T2.1 dev movement commands.
+                .then(Commands.literal("moveto")
+                        .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                        .executes(ctx -> {
+                                            CommandSourceStack src = ctx.getSource();
+                                            AICompanionBot bot = BotManager.current();
+                                            if (bot == null) {
+                                                src.sendFailure(Component.literal("[BOT] no bot"));
+                                                return 0;
+                                            }
+                                            double x = DoubleArgumentType.getDouble(ctx, "x");
+                                            double z = DoubleArgumentType.getDouble(ctx, "z");
+                                            bot.mover().moveTo(x, z);
+                                            src.sendSuccess(() -> Component.literal("[BOT] moveto (" + x + "," + z + ")"), false);
+                                            return 1;
+                                        }))))
+                .then(Commands.literal("stop").executes(ctx -> {
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        ctx.getSource().sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    bot.mover().stop();
+                    ctx.getSource().sendSuccess(() -> Component.literal("[BOT] stopped"), false);
+                    return 1;
+                }))
+                .then(Commands.literal("crouch")
+                        .then(Commands.argument("on", BoolArgumentType.bool()).executes(ctx -> {
+                            AICompanionBot bot = BotManager.current();
+                            if (bot == null) {
+                                ctx.getSource().sendFailure(Component.literal("[BOT] no bot"));
+                                return 0;
+                            }
+                            boolean on = BoolArgumentType.getBool(ctx, "on");
+                            bot.mover().setCrouch(on);
+                            ctx.getSource().sendSuccess(() -> Component.literal("[BOT] crouch=" + on), false);
+                            return 1;
+                        }))));
     }
 }

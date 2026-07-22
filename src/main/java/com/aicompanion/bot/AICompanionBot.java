@@ -16,13 +16,28 @@ import net.minecraft.server.level.ServerPlayer;
  */
 public class AICompanionBot extends ServerPlayer {
 
+    private final BotMovementController mover = new BotMovementController();
+
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
     }
 
+    /** Tactical movement executor (T2.1). */
+    public BotMovementController mover() {
+        return mover;
+    }
+
     @Override
     public void tick() {
-        // Phase 3+ inserts: perception.gather → reflex → decision → action here.
-        super.tick(); // vanilla player tick: hunger, regen, item-use progress, effects.
+        // Phase 3+ inserts: perception.gather → reflex → decision here.
+        // Action layer: set movement inputs before the physics tick consumes them.
+        mover.tick(this);
+
+        // ServerPlayer.tick() does only housekeeping; the movement/LivingEntity tick lives in
+        // doTick() (normally driven by the network connection). The bot has no connection ticking
+        // it, so we drive BOTH here = a full player tick: housekeeping + aiStep/travel physics
+        // (gravity, collision, step-up, friction, hunger, regen).
+        super.tick();  // ServerPlayer housekeeping (gameMode, containers, criteria)
+        this.doTick(); // Player/LivingEntity tick → aiStep → travel
     }
 }

@@ -2,6 +2,8 @@ package com.aicompanion.test;
 
 import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotDeathTest;
+import com.aicompanion.test.tests.BotMoveFlatTest;
+import com.aicompanion.test.tests.BotMoveStairTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotSingleTest;
@@ -30,6 +32,9 @@ public final class BotTestRegistry {
         register("bot_death", BotDeathTest::new);
         register("bot_persist_save", BotPersistSaveTest::new);
         register("bot_persist_load", BotPersistLoadTest::new);
+        // T2.1 movement executor.
+        register("bot_move_flat", BotMoveFlatTest::new);
+        register("bot_move_stair", BotMoveStairTest::new);
     }
 
     private BotTestRegistry() {
