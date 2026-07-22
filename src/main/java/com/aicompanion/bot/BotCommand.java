@@ -167,6 +167,27 @@ public final class BotCommand {
                     LOGGER.info("{}", dump);
                     src.sendSuccess(() -> Component.literal(dump), false);
                     return 1;
+                }))
+                // T3.2 tactical-judgment dump.
+                .then(Commands.literal("tactics").executes(ctx -> {
+                    CommandSourceStack src = ctx.getSource();
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        src.sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    com.aicompanion.bot.combat.CombatStats me =
+                            com.aicompanion.bot.combat.CombatStats.of(bot);
+                    StringBuilder sb = new StringBuilder("[TACTICS] ").append(me);
+                    for (com.aicompanion.bot.perception.TargetInfo t : bot.perception().targets) {
+                        sb.append("\n  - ").append(t.entity.getType())
+                                .append(" -> ")
+                                .append(com.aicompanion.bot.combat.CombatRules.evaluate(t, me));
+                    }
+                    String dump = sb.toString();
+                    LOGGER.info("{}", dump);
+                    src.sendSuccess(() -> Component.literal(dump), false);
+                    return 1;
                 })));
     }
 }

@@ -9,6 +9,7 @@ import com.aicompanion.test.tests.BotPathBlockedTest;
 import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
+import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotSingleTest;
@@ -49,6 +50,8 @@ public final class BotTestRegistry {
         register("bot_phase2_combo", BotPhase2ComboTest::new);
         // T3.1 perception.
         register("bot_perception", BotPerceptionTest::new);
+        // T3.2 tactical rule engine.
+        register("bot_tactics", BotTacticsTest::new);
     }
 
     private BotTestRegistry() {
