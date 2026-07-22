@@ -7,6 +7,7 @@ import com.aicompanion.test.tests.BotMoveFlatTest;
 import com.aicompanion.test.tests.BotMoveStairTest;
 import com.aicompanion.test.tests.BotPathBlockedTest;
 import com.aicompanion.test.tests.BotPathReachTest;
+import com.aicompanion.test.tests.BotPhase2ComboTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotSingleTest;
@@ -43,6 +44,8 @@ public final class BotTestRegistry {
         // T2.3 A* pathfinding.
         register("bot_path_reach", BotPathReachTest::new);
         register("bot_path_blocked", BotPathBlockedTest::new);
+        // Phase 2 integration/regression.
+        register("bot_phase2_combo", BotPhase2ComboTest::new);
     }
 
     private BotTestRegistry() {
