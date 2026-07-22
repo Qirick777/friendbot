@@ -1,6 +1,7 @@
 package com.aicompanion.test;
 
 import com.aicompanion.AICompanionMod;
+import com.aicompanion.bot.BotCommand;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -28,7 +29,8 @@ public final class BotTestHarness {
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         BotTestCommand.register(event.getDispatcher());
-        LOGGER.info("[BOTTEST] /bottest command registered");
+        BotCommand.register(event.getDispatcher());
+        LOGGER.info("[BOTTEST] /bottest and /bot commands registered");
     }
 
     @SubscribeEvent

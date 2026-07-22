@@ -1,5 +1,6 @@
 package com.aicompanion.test;
 
+import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.DummyTest;
 
 import java.util.LinkedHashMap;
@@ -18,6 +19,8 @@ public final class BotTestRegistry {
     static {
         // T0.2 harness self-check.
         register("dummy", DummyTest::new);
+        // T1.1 resident fake-player.
+        register("bot_alive", BotAliveTest::new);
     }
 
     private BotTestRegistry() {
