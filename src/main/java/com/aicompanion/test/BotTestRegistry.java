@@ -3,6 +3,7 @@ package com.aicompanion.test;
 import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotDeathTest;
 import com.aicompanion.test.tests.BotLookTest;
+import com.aicompanion.test.tests.BotMeleeTest;
 import com.aicompanion.test.tests.BotMoveFlatTest;
 import com.aicompanion.test.tests.BotMoveStairTest;
 import com.aicompanion.test.tests.BotPathBlockedTest;
@@ -52,6 +53,8 @@ public final class BotTestRegistry {
         register("bot_perception", BotPerceptionTest::new);
         // T3.2 tactical rule engine.
         register("bot_tactics", BotTacticsTest::new);
+        // T3.3 melee combat.
+        register("bot_melee", BotMeleeTest::new);
     }
 
     private BotTestRegistry() {

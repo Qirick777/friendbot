@@ -21,6 +21,8 @@ public class AICompanionBot extends ServerPlayer {
     private final BotPathPlanner planner = new BotPathPlanner();
     private final com.aicompanion.bot.perception.Perception perception =
             new com.aicompanion.bot.perception.Perception();
+    private final com.aicompanion.bot.combat.BotMeleeCombat meleeCombat =
+            new com.aicompanion.bot.combat.BotMeleeCombat();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -29,6 +31,11 @@ public class AICompanionBot extends ServerPlayer {
     /** Perception layer (T3.1). */
     public com.aicompanion.bot.perception.Perception perception() {
         return perception;
+    }
+
+    /** Critical-hit melee combat (T3.3). */
+    public com.aicompanion.bot.combat.BotMeleeCombat meleeCombat() {
+        return meleeCombat;
     }
 
     /** Tactical movement executor (T2.1). */
@@ -51,10 +58,15 @@ public class AICompanionBot extends ServerPlayer {
         // Perception (T3.1): snapshot all facts first, so every layer sees the same tick.
         perception.gather(this);
         // Phase 3+ inserts: reflex → decision here (consume perception).
-        // Strategic layer: A* planner picks the next node → sets the movement target.
-        planner.tick(this);
-        // Action layer: set movement inputs before the physics tick consumes them.
-        mover.tick(this);
+        if (meleeCombat.hasTarget()) {
+            // Melee combat (T3.3) drives movement inputs directly (no A*/mover).
+            meleeCombat.tick(this);
+        } else {
+            // Strategic layer: A* planner picks the next node → sets the movement target.
+            planner.tick(this);
+            // Action layer: set movement inputs before the physics tick consumes them.
+            mover.tick(this);
+        }
 
         // ServerPlayer.tick() does only housekeeping; the movement/LivingEntity tick lives in
         // doTick() (normally driven by the network connection). The bot has no connection ticking

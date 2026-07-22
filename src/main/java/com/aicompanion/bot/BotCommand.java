@@ -168,6 +168,33 @@ public final class BotCommand {
                     src.sendSuccess(() -> Component.literal(dump), false);
                     return 1;
                 }))
+                // T3.3 melee combat.
+                .then(Commands.literal("attack").executes(ctx -> {
+                    CommandSourceStack src = ctx.getSource();
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        src.sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    if (bot.perception().targets.isEmpty()) {
+                        src.sendFailure(Component.literal("[BOT] no target in range"));
+                        return 0;
+                    }
+                    var t = bot.perception().targets.get(0).entity; // nearest
+                    bot.meleeCombat().setTarget(t);
+                    src.sendSuccess(() -> Component.literal("[BOT] melee attacking " + t.getType()), false);
+                    return 1;
+                }))
+                .then(Commands.literal("attackstop").executes(ctx -> {
+                    AICompanionBot bot = BotManager.current();
+                    if (bot == null) {
+                        ctx.getSource().sendFailure(Component.literal("[BOT] no bot"));
+                        return 0;
+                    }
+                    bot.meleeCombat().stop();
+                    ctx.getSource().sendSuccess(() -> Component.literal("[BOT] attack stopped"), false);
+                    return 1;
+                }))
                 // T3.2 tactical-judgment dump.
                 .then(Commands.literal("tactics").executes(ctx -> {
                     CommandSourceStack src = ctx.getSource();
