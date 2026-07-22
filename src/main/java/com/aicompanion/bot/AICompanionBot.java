@@ -23,6 +23,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.perception.Perception();
     private final com.aicompanion.bot.combat.BotMeleeCombat meleeCombat =
             new com.aicompanion.bot.combat.BotMeleeCombat();
+    private final com.aicompanion.bot.combat.BotRangedCombat rangedCombat =
+            new com.aicompanion.bot.combat.BotRangedCombat();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -36,6 +38,11 @@ public class AICompanionBot extends ServerPlayer {
     /** Critical-hit melee combat (T3.3). */
     public com.aicompanion.bot.combat.BotMeleeCombat meleeCombat() {
         return meleeCombat;
+    }
+
+    /** Predictive ranged combat (T3.4). */
+    public com.aicompanion.bot.combat.BotRangedCombat rangedCombat() {
+        return rangedCombat;
     }
 
     /** Tactical movement executor (T2.1). */
@@ -61,6 +68,10 @@ public class AICompanionBot extends ServerPlayer {
         if (meleeCombat.hasTarget()) {
             // Melee combat (T3.3) drives movement inputs directly (no A*/mover).
             meleeCombat.tick(this);
+        } else if (rangedCombat.hasTarget()) {
+            // Ranged combat (T3.4) owns aim (yaw/pitch) and movement inputs directly, and fires
+            // the arrow here (before the physics tick) so shootFromRotation reads the aim it wrote.
+            rangedCombat.tick(this);
         } else {
             // Strategic layer: A* planner picks the next node → sets the movement target.
             planner.tick(this);
@@ -76,7 +87,10 @@ public class AICompanionBot extends ServerPlayer {
         this.doTick(); // Player/LivingEntity tick → aiStep → travel
 
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
-        // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot).
-        look.tick(this);
+        // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
+        // aim (xRot/yaw) itself — the look controller must not fight it, so skip it while shooting.
+        if (!rangedCombat.hasTarget()) {
+            look.tick(this);
+        }
     }
 }

@@ -10,6 +10,7 @@ import com.aicompanion.test.tests.BotPathBlockedTest;
 import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
+import com.aicompanion.test.tests.BotRangedTest;
 import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
@@ -55,6 +56,8 @@ public final class BotTestRegistry {
         register("bot_tactics", BotTacticsTest::new);
         // T3.3 melee combat.
         register("bot_melee", BotMeleeTest::new);
+        // T3.4 ranged combat.
+        register("bot_ranged", BotRangedTest::new);
     }
 
     private BotTestRegistry() {
