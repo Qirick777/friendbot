@@ -45,6 +45,7 @@ import com.aicompanion.test.tests.BotKiteFlipTest;
 import com.aicompanion.test.tests.BotKiteRecoverTest;
 import com.aicompanion.test.tests.BotWardenLiveSpeedTest;
 import com.aicompanion.test.tests.BotWardenProbeTest;
+import com.aicompanion.test.tests.BotWardenPursuitTest;
 import com.aicompanion.test.tests.BotWindowVarianceTest;
 import com.aicompanion.test.tests.BotWardenTacticsTest;
 import com.aicompanion.test.tests.DummyTest;
@@ -127,6 +128,7 @@ public final class BotTestRegistry {
         register("bot_kite_approach", BotKiteApproachTest::new);
         register("bot_window_variance", BotWindowVarianceTest::new);
         register("bot_warden_live_speed", BotWardenLiveSpeedTest::new);
+        register("bot_warden_pursuit", BotWardenPursuitTest::new);
         register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);
         register("bot_warden_noname", BotWardenTacticsTest.NoName::new);
         register("bot_warden_generic", BotWardenTacticsTest.Generic::new);
