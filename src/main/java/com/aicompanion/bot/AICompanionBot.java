@@ -33,6 +33,8 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
             new com.aicompanion.bot.combat.BotEnvironment();
+    private final com.aicompanion.bot.combat.BotRescue rescue =
+            new com.aicompanion.bot.combat.BotRescue();
 
     public AICompanionBot(MinecraftServer server, ServerLevel level, GameProfile profile) {
         super(server, level, profile);
@@ -73,6 +75,11 @@ public class AICompanionBot extends ServerPlayer {
         return environment;
     }
 
+    /** Kidnap-escape + user fall-catch via mounting (T4.5). */
+    public com.aicompanion.bot.combat.BotRescue rescue() {
+        return rescue;
+    }
+
     /** Tactical movement executor (T2.1). */
     public BotMovementController mover() {
         return mover;
@@ -103,14 +110,18 @@ public class AICompanionBot extends ServerPlayer {
         environment.tickFallSurvival(this);
         boolean creeperActing = environment.tickCreeperDefense(this);
 
+        // Rescue (T4.5): kidnap-escape (user critical) + user fall-catch, both via mounting. Runs in
+        // the reflex layer; owns the tick when catching/carrying.
+        boolean rescuing = !evading && !creeperActing && rescue.tick(this);
+
         // Survival (T4.1) has next priority (design 8.1 "위가 이긴다"): if a health-driven survival
         // mode is active, it overrides combat and movement this tick.
-        boolean survivalActive = !evading && !creeperActing && survival.tick(this);
+        boolean survivalActive = !evading && !creeperActing && !rescuing && survival.tick(this);
 
         // User protection (T4.3): top-level coordinator below reflex/survival, above combat. It
         // selects which enemy to engage (or follow/heal/flee) and hands it to the combat controllers,
         // which run in the branches below. Inert when there is no user.
-        if (!evading && !creeperActing && !survivalActive) {
+        if (!evading && !creeperActing && !rescuing && !survivalActive) {
             protection.tick(this);
         }
 
@@ -118,6 +129,8 @@ public class AICompanionBot extends ServerPlayer {
             // reflex.tickR1 already drove movement (shield up / sidestep).
         } else if (creeperActing) {
             // environment.tickCreeperDefense already drove movement (wall + step / shield + flee).
+        } else if (rescuing) {
+            // rescue.tick already drove movement (approach / mount / sprint-away).
         } else if (survivalActive) {
             // survival.tick already drove movement inputs / item use / pearl throw.
         } else if (meleeCombat.hasTarget()) {
@@ -150,11 +163,15 @@ public class AICompanionBot extends ServerPlayer {
         // giving the bot genuine fallDistance accumulation and fall damage (and a real R2 trigger).
         this.doCheckFallDamage(this.getX() - preX, this.getY() - preY, this.getZ() - preZ, this.onGround());
 
+        // Drive passenger positioning (T4.5): the fake-player passenger's own rideTick may not run,
+        // so glue it to the bot's head here every tick — after the bot has moved.
+        rescue.positionPassengers(this);
+
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
         // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
         // aim (xRot/yaw) itself — the look controller must not fight it, so skip it while shooting.
         // Survival and reflex also own rotation (facing/away from the threat) when active.
-        if (!rangedCombat.hasTarget() && !survivalActive && !evading && !creeperActing) {
+        if (!rangedCombat.hasTarget() && !survivalActive && !evading && !creeperActing && !rescuing) {
             look.tick(this);
         }
     }
