@@ -86,6 +86,18 @@ public class BotWardenPursuitTest implements BotTest {
     private Vec3 lastBotPos;
     private Vec3 lastWardenPos;
 
+    // --- signal B observation (diagnostic only; the pass gate is unchanged) -------------------
+    // dGapDt measured at -0.0738 b/t, nine times below B's redefined threshold MIN_OPENING_RATE
+    // (0.0084), sustained across all 60 window ticks in 30/30 engagements. If B does not fire here
+    // it does not fire anywhere. Recording WHY it stays silent matters as much as whether it does:
+    // intent gate unmet / threshold not crossed / never evaluated are three different defects.
+    private boolean bFired;
+    private int bFiredTick = -1;
+    private double bGapAtFire = -1;
+    private int bIntentTicks;        // ticks the monitor saw an intent to open distance
+    private int bMaxFailingTicks;    // high-water mark of its consecutive-failing counter
+    private int bEvaluatedTicks;     // ticks the target was actually in the monitor's map
+
     @Override
     public int[] arenaBounds() {
         return new int[]{-94, 30, -14, 14};
@@ -172,6 +184,12 @@ public class BotWardenPursuitTest implements BotTest {
         botPathLen = 0;
         lastBotPos = null;
         lastWardenPos = null;
+        bFired = false;
+        bFiredTick = -1;
+        bGapAtFire = -1;
+        bIntentTicks = 0;
+        bMaxFailingTicks = 0;
+        bEvaluatedTicks = 0;
     }
 
     @Override
@@ -222,6 +240,22 @@ public class BotWardenPursuitTest implements BotTest {
         }
         lastBotPos = bot.position();
         lastWardenPos = warden.position();
+        // Signal B, observed not consumed: the harness never acts on it.
+        int failing = bot.kiteMonitor().closingTicks(warden);
+        if (failing > 0 || bot.kiteMonitor().intendedOpen()) {
+            bEvaluatedTicks++;
+        }
+        if (bot.kiteMonitor().intendedOpen()) {
+            bIntentTicks++;
+        }
+        bMaxFailingTicks = Math.max(bMaxFailingTicks, failing);
+        if (!bFired && bot.kiteMonitor().failing(warden)) {
+            bFired = true;
+            bFiredTick = t;
+            bGapAtFire = gap;
+            LOGGER.info("[PURSUIT] signal B fired t={} gap={} (flightStart t={})",
+                    t, String.format("%.2f", gap), SETTLE);
+        }
         gapTrail.addLast(new double[]{t, gap});
         while (!gapTrail.isEmpty() && t - gapTrail.peekFirst()[0] > SpeedObserver.WINDOW_TICKS) {
             gapTrail.removeFirst();
@@ -297,10 +331,14 @@ public class BotWardenPursuitTest implements BotTest {
                         + "indepTrailing:%.4f,gapFlightStart:%.2f,gapWindowStart:%.2f,gapAtDraw:%.2f,"
                         + "gapWindowDelta:%+.2f,dGapDt:%+.5f,gapMin:%.2f,gapMax:%.2f,gapAtEnd:%.2f,"
                         + "gapNet:%+.2f,approachSum:%+.2f,lateralSum:%.2f,"
+                        + "bFired:%b,bFiredTick:%d,bGapAtFire:%.2f,bIntentTicks:%d,"
+                        + "bMaxFailingTicks:%d,bEvaluatedTicks:%d,bThreshold:%.4f,"
                         + "stationaryRef:%.4f,delta:%+.4f,botSprint:%.4f",
                 draw, runMean, movingTicks, botFled, botPathLen, n, trailingRate,
                 gapAtFlightStart, gapWindowStart, gapAtDraw, windowSpan, dGapDt, gapMin, gapMax,
-                gapAtEnd, gapNet, approachSum, lateralSum, STATIONARY_REFERENCE,
+                gapAtEnd, gapNet, approachSum, lateralSum,
+                bFired, bFiredTick, bGapAtFire, bIntentTicks, bMaxFailingTicks, bEvaluatedTicks,
+                com.aicompanion.bot.combat.KiteMonitor.MIN_OPENING_RATE, STATIONARY_REFERENCE,
                 draw >= 0 ? draw - STATIONARY_REFERENCE : Double.NaN, CombatStats.BOT_SPRINT_SPEED);
         String expected = "premise: >=" + SpeedObserver.MIN_SPAN_TICKS + " ticks in motion and one "
                 + "valid in-flight window — the pursuit rate itself is reported, never gated";
