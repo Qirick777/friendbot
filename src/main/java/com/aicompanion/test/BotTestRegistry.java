@@ -26,6 +26,10 @@ import com.aicompanion.test.tests.BotProtectInterveneTest;
 import com.aicompanion.test.tests.BotProtectPriorityTest;
 import com.aicompanion.test.tests.BotRangedTest;
 import com.aicompanion.test.tests.BotRule1FastTest;
+import com.aicompanion.test.tests.BotRule1ActionTest;
+import com.aicompanion.test.tests.BotRule2ActionTest;
+import com.aicompanion.test.tests.BotRule4ActionTest;
+import com.aicompanion.test.tests.BotRuleDCellTest;
 import com.aicompanion.test.tests.BotSurvivalTest;
 import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
@@ -116,6 +120,15 @@ public final class BotTestRegistry {
         register("bot_warden_probe", BotWardenProbeTest::new);
         register("bot_speed_probe", BotSpeedProbeTest::new);
         register("bot_rule1_fast", BotRule1FastTest::new);
+        // Rule wiring — behaviour harnesses (R.2 extension: judge actions, not dumps).
+        register("bot_rule2_deny", BotRule2ActionTest.Deny::new);
+        register("bot_rule2_allow", BotRule2ActionTest.Allow::new);
+        register("bot_rule4_pierce", BotRule4ActionTest.Pierce::new);
+        register("bot_rule4_normal", BotRule4ActionTest.Normal::new);
+        register("bot_rule4_axe", BotRule4ActionTest.Axe::new);
+        register("bot_rule1_nokite", BotRule1ActionTest.NoKite::new);
+        register("bot_rule1_kite", BotRule1ActionTest.Kite::new);
+        register("bot_rule_dcell", BotRuleDCellTest::new);
         register("bot_kite_flip", BotKiteFlipTest::new);
         register("bot_kite_band_latch", BotKiteBandLatchTest::new);
         register("bot_kite_recover", BotKiteRecoverTest::new);
