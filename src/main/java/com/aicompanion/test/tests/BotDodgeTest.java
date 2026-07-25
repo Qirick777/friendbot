@@ -41,7 +41,7 @@ public class BotDodgeTest implements BotTest {
 
     @Override
     public int repeats() {
-        return 15;
+        return com.aicompanion.test.BotTestManager.SCREENING_TRIALS;
     }
 
     @Override

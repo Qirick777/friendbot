@@ -43,6 +43,13 @@ public class BotWardenLiveSpeedTest implements BotTest {
     private double independentSpeed;
     private Vec3 measureStart;
     private int measureStartTick = -1;
+    // (2a) the same 60-tick trailing window the observer uses, measured independently, so a
+    // long-span average and a recent-window average can be told apart.
+    private final java.util.ArrayDeque<double[]> trail = new java.util.ArrayDeque<>();
+    private double trailingSpeed;
+    private double pathSpeed;      // path length / ticks (upper bound on displacement/ticks)
+    private double pathSum;
+    private Vec3 lastWardenPos;
 
     @Override
     public String name() {
@@ -134,6 +141,24 @@ public class BotWardenLiveSpeedTest implements BotTest {
                 independentSpeed = Math.hypot(warden.getX() - measureStart.x, warden.getZ() - measureStart.z)
                         / (t - measureStartTick);
             }
+            // trailing window, same length as SpeedObserver.WINDOW_TICKS
+            trail.addLast(new double[]{t, warden.getX(), warden.getZ()});
+            while (!trail.isEmpty() && t - trail.peekFirst()[0] > 60) {
+                trail.removeFirst();
+            }
+            if (trail.size() > 1) {
+                double[] a = trail.peekFirst();
+                double[] b = trail.peekLast();
+                double sp = b[0] - a[0];
+                if (sp > 0) {
+                    trailingSpeed = Math.hypot(b[1] - a[1], b[2] - a[2]) / sp;
+                }
+            }
+            if (lastWardenPos != null) {
+                pathSum += Math.hypot(warden.getX() - lastWardenPos.x, warden.getZ() - lastWardenPos.z);
+                pathSpeed = pathSum / Math.max(1, t - measureStartTick);
+            }
+            lastWardenPos = warden.position();
             for (TargetInfo ti : bot.perception().targets) {
                 if (ti.entity == warden) {
                     observedAtJudge = ti.observedSpeed;
@@ -151,13 +176,16 @@ public class BotWardenLiveSpeedTest implements BotTest {
     public BotTestResult judge(BotTestContext ctx) {
         boolean live = observedAtJudge >= MIN_LIVE && observedAtJudge <= MAX_LIVE;
         boolean ok = observedFlag && live && canKite != null && canKite;
-        LOGGER.info("[WARDEN] live speed observed={} independent={} observedFlag={} canKite={} botSprint={}",
+        LOGGER.info("[WARDEN] live speed observed={} indepWhole={} indepTrail60={} indepPath={} "
+                        + "canKite={} botSprint={}",
                 String.format("%.4f", observedAtJudge), String.format("%.4f", independentSpeed),
-                observedFlag, canKite, CombatStats.BOT_SPRINT_SPEED);
+                String.format("%.4f", trailingSpeed), String.format("%.4f", pathSpeed),
+                canKite, CombatStats.BOT_SPRINT_SPEED);
         String measured = String.format(
-                "observedSpeed:%.4f,independentSpeed:%.4f,liveBand:%.2f~%.2f,speedObserved:%b,canKite:%s,botSprint:%.4f",
-                observedAtJudge, independentSpeed, MIN_LIVE, MAX_LIVE, observedFlag,
-                String.valueOf(canKite), CombatStats.BOT_SPRINT_SPEED);
+                "observedSpeed:%.4f,indepWholeSpan:%.4f,indepTrailing60:%.4f,indepPathLen:%.4f,"
+                        + "liveBand:%.2f~%.2f,speedObserved:%b,canKite:%s,botSprint:%.4f",
+                observedAtJudge, independentSpeed, trailingSpeed, pathSpeed, MIN_LIVE, MAX_LIVE,
+                observedFlag, String.valueOf(canKite), CombatStats.BOT_SPRINT_SPEED);
         String expected = "a MOVING warden's observed speed is non-zero and below the bot's sprint, "
                 + "and rule 1 derives canKite=true from that measurement (not from a pinned 0.0)";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);

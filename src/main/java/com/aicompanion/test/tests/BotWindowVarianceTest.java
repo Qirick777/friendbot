@@ -179,7 +179,8 @@ public class BotWindowVarianceTest implements BotTest {
             double var = est.stream().mapToDouble(e -> (e - mean) * (e - mean)).average().orElse(0);
             double sd = Math.sqrt(var);
             double cv = mean > 1.0E-9 ? sd / mean : -1;
-            line.append(String.format("|W%d: mean=%.4f sd=%.4f cv=%.3f k=%d", w, mean, sd, cv, est.size()));
+            line.append(String.format("|W%d: mean=%.4f sd=%.4f cv=%.3f n=%d(indep~%d)",
+                    w, mean, sd, cv, est.size(), Math.max(1, samples.size() / w)));
         }
         LOGGER.info("[WINDOW] {}", line);
         report.add(line.toString());
