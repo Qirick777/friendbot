@@ -77,6 +77,12 @@ public class Perception {
         // Incoming projectiles: heading toward the bot.
         incoming.clear();
         for (Projectile p : level.getEntitiesOfClass(Projectile.class, box, Entity::isAlive)) {
+            // The bot's OWN arrows are not incoming threats. Without this the reflex layer treated
+            // every shot the bot fired as an attack on itself and evaded continuously, which broke
+            // band keeping while kiting.
+            if (p.getOwner() == bot) {
+                continue;
+            }
             if (isHeadingToward(p, botPos)) {
                 incoming.add(p);
             }

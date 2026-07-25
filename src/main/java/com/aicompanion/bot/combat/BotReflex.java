@@ -38,6 +38,7 @@ public class BotReflex {
 
     private boolean placedTotem;          // we put a totem in the off-hand (for proc detection)
     private final int orbitSign = 1;      // consistent circle-strafe direction → no zero-velocity flips
+    private boolean chargeEscaping;       // T4.6: currently fleeing a charged-up special attack
 
     // --- R0: totem pre-equip (never blocks the other layers) ---
 
@@ -73,6 +74,45 @@ public class BotReflex {
         if (bot.getOffhandItem().getItem() == Items.TOTEM_OF_UNDYING) {
             placedTotem = true;
         }
+    }
+
+    /**
+     * R-charge (T4.6 / design 6.5 "소닉 차징 감지 시 즉시 밴드 밖 이탈(반사)"). Reads the charge signal
+     * from the target's LAYER-2 PROFILE — the reflex never asks which mob this is — and, while a
+     * charge is up, sprints straight out past the ability's range.
+     *
+     * @return true if it owns movement this tick.
+     */
+    public boolean tickChargeEscape(AICompanionBot bot) {
+        TargetInfo charging = null;
+        for (TargetInfo t : bot.perception().targets) {
+            if (t.entity != null && t.entity.isAlive() && t.layer2Profile.isCharging(t.entity)) {
+                charging = t;
+                break;
+            }
+        }
+        if (charging == null) {
+            chargeEscaping = false;
+            return false;
+        }
+        // Escape past the ability's own range (rule-3 band upper bound covers it with margin).
+        double escapeTo = CombatRules.bandMax(charging);
+        double dist = charging.distance;
+        if (!chargeEscaping) {
+            chargeEscaping = true;
+            LOGGER.info("[REFLEX] CHARGE detected (layer-2 signal) dist={} -> escape beyond {}",
+                    fmt(dist), fmt(escapeTo));
+        }
+        float away = Mth.wrapDegrees(
+                yawTo(bot.getX(), bot.getZ(), charging.entity.getX(), charging.entity.getZ()) + 180.0F);
+        bot.setYRot(away);
+        bot.setYBodyRot(away);
+        bot.setYHeadRot(away);
+        bot.zza = 1.0F;
+        bot.xxa = 0.0F;
+        bot.setSprinting(true);
+        bot.setJumping(false);
+        return true;
     }
 
     // --- R1: shield / sidestep evade. Returns true if it owns movement this tick. ---
@@ -153,10 +193,18 @@ public class BotReflex {
         return bot.perception().incoming.isEmpty() ? null : bot.perception().incoming.get(0);
     }
 
+    /**
+     * Projectile-shooting enemies only. Deliberately NOT {@code TargetInfo.isRanged}: since T4.6
+     * that flag also covers mobs whose layer-2 range is a hitscan/AoE ability (a warden's sonic
+     * boom), and orbiting such a mob is useless — it cannot be dodged, only outranged, which is the
+     * job of the tactical band and the charge-escape reflex. Circle-strafing is for dodging actual
+     * projectiles, so the test is "does it shoot things".
+     */
     @Nullable
     private static Entity nearestRangedEnemy(AICompanionBot bot) {
         for (TargetInfo t : bot.perception().targets) {
-            if (t.entity != null && t.entity.isAlive() && t.isRanged && t.distance <= RANGED_EVADE_DIST) {
+            if (t.entity != null && t.entity.isAlive() && t.distance <= RANGED_EVADE_DIST
+                    && t.entity instanceof net.minecraft.world.entity.monster.RangedAttackMob) {
                 return t.entity;
             }
         }

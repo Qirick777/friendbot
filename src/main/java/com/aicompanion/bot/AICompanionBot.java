@@ -103,7 +103,10 @@ public class AICompanionBot extends ServerPlayer {
         // Reflex layer (T4.2) runs first (design ch.7 "판단보다 먼저, 매 틱 최우선"). R0 totem
         // pre-equip never blocks; R1 shield/sidestep owns movement for the tick when it fires.
         reflex.tickR0(this);
-        boolean evading = reflex.tickR1(this);
+        // T4.6: a charged-up special attack (layer-2 signal) outranks the ordinary R1 evade —
+        // getting outside its range is the only thing that helps against a piercing hit.
+        boolean chargeEscaping = reflex.tickChargeEscape(this);
+        boolean evading = chargeEscaping || reflex.tickR1(this);
 
         // Environment reflex (T4.4): fall survival (R2) drops water/blocks under a fatal fall
         // (no movement ownership); creeper defense places a blast wall or shields+flees.

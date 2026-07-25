@@ -14,20 +14,32 @@ public class TacticalDecision {
     public final double bandDistance;  // rule 3 (kiting band)
     public final boolean shieldOn;     // rule 4 (off if target pierces armor)
     public final boolean keepDistance; // rule 4 (target is knockback-immune)
+    public final double bandMin;       // rule 3 band lower bound (T4.6)
+    public final double bandMax;       // rule 3 band upper bound (T4.6)
 
     public TacticalDecision(boolean canKite, boolean allowMelee, double bandDistance,
                             boolean shieldOn, boolean keepDistance) {
+        this(canKite, allowMelee, bandDistance, shieldOn, keepDistance,
+                bandDistance - 1.0, bandDistance + 3.0);
+    }
+
+    public TacticalDecision(boolean canKite, boolean allowMelee, double bandDistance,
+                            boolean shieldOn, boolean keepDistance,
+                            double bandMin, double bandMax) {
         this.canKite = canKite;
         this.allowMelee = allowMelee;
         this.mode = allowMelee ? Mode.MELEE : Mode.RANGED;
         this.bandDistance = bandDistance;
         this.shieldOn = shieldOn;
         this.keepDistance = keepDistance;
+        this.bandMin = bandMin;
+        this.bandMax = bandMax;
     }
 
     @Override
     public String toString() {
-        return String.format("{canKite=%b allowMelee=%b mode=%s band=%.1f shield=%b keepDist=%b}",
-                canKite, allowMelee, mode, bandDistance, shieldOn, keepDistance);
+        return String.format(
+                "{canKite=%b allowMelee=%b mode=%s band=%.1f bandRange=%.1f~%.1f shield=%b keepDist=%b}",
+                canKite, allowMelee, mode, bandDistance, bandMin, bandMax, shieldOn, keepDistance);
     }
 }

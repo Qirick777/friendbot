@@ -31,6 +31,10 @@ import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotShieldTest;
 import com.aicompanion.test.tests.BotSingleTest;
 import com.aicompanion.test.tests.BotTotemTest;
+import com.aicompanion.test.tests.BotWardenBandTest;
+import com.aicompanion.test.tests.BotWardenChargeTest;
+import com.aicompanion.test.tests.BotWardenProbeTest;
+import com.aicompanion.test.tests.BotWardenTacticsTest;
 import com.aicompanion.test.tests.DummyTest;
 
 import java.util.LinkedHashMap;
@@ -95,6 +99,14 @@ public final class BotTestRegistry {
         register("bot_escape_farthreat", BotEscapeFarThreatTest::new);
         register("bot_catch_fall", BotCatchFallTest::new);
         register("bot_catch_none", BotCatchNoneTest::new);
+        // T4.6 warden layer-2 data (step-1 probe).
+        register("bot_warden_probe", BotWardenProbeTest::new);
+        register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);
+        register("bot_warden_noname", BotWardenTacticsTest.NoName::new);
+        register("bot_warden_generic", BotWardenTacticsTest.Generic::new);
+        register("bot_warden_band", BotWardenBandTest::new);
+        register("bot_warden_charge", BotWardenChargeTest.Escape::new);
+        register("bot_warden_charge_none", BotWardenChargeTest.None::new);
     }
 
     private BotTestRegistry() {

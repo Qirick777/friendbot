@@ -13,15 +13,27 @@ public final class CombatRules {
     public static final double DEFAULT_SAFETY = 1.0;
     /** Extra spacing added to the safe distance / kiting band (tunable, ch.18). */
     public static final double DEFAULT_MARGIN = 2.0;
+    /**
+     * Kiting-band margins, COMMON to every mob (T4.6 / ch.18). The band is
+     * [safeDistance+MIN, safeDistance+MAX] around the rule-3 distance. With the warden's layer-2
+     * horizontal range of 15 these give exactly the documented 16~20 band, and the same two
+     * constants apply to every other mob — no per-mob margin, so the band still comes from one rule.
+     */
+    public static final double BAND_MARGIN_MIN = 1.0;
+    public static final double BAND_MARGIN_MAX = 5.0;
     /** Knockback resistance at/above which a target is treated as knockback-immune. */
     public static final double KB_IMMUNE = 1.0;
 
     private CombatRules() {
     }
 
-    /** Rule 1 — kiting is possible when the target is slower than the bot's sprint. */
+    /**
+     * Rule 1 — kiting is possible when the target is slower than the bot's sprint. Both sides are
+     * in blocks/tick: the target's raw MOVEMENT_SPEED attribute is converted first, because the
+     * attribute is not a b/t figure (see {@link CombatStats#MOB_ATTR_TO_BLOCKS_PER_TICK}).
+     */
     public static boolean canKite(TargetInfo t, double botSprintSpeed) {
-        return t.moveSpeed < botSprintSpeed;
+        return CombatStats.mobSpeedBlocksPerTick(t.moveSpeed) < botSprintSpeed;
     }
 
     /**
@@ -39,6 +51,16 @@ public final class CombatRules {
     /** Rule 3 — safe distance / kiting band = max(melee reach, ranged range) + margin. */
     public static double safeDistance(TargetInfo t, double margin) {
         return Math.max(t.reach, t.rangedRange) + margin;
+    }
+
+    /** Rule 3 — band lower bound (common margin, T4.6). */
+    public static double bandMin(TargetInfo t) {
+        return safeDistance(t, BAND_MARGIN_MIN);
+    }
+
+    /** Rule 3 — band upper bound (common margin, T4.6). */
+    public static double bandMax(TargetInfo t) {
+        return safeDistance(t, BAND_MARGIN_MAX);
     }
 
     /** Rule 4a — shield is useful unless the target pierces armor. */
@@ -59,7 +81,8 @@ public final class CombatRules {
         double band = safeDistance(t, margin);
         boolean shieldOn = useShield(t);
         boolean keepDist = keepDistance(t);
-        return new TacticalDecision(canKite, allowMelee, band, shieldOn, keepDist);
+        return new TacticalDecision(canKite, allowMelee, band, shieldOn, keepDist,
+                bandMin(t), bandMax(t));
     }
 
     public static TacticalDecision evaluate(TargetInfo t, CombatStats me) {

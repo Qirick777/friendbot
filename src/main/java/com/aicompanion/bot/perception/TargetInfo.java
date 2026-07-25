@@ -22,12 +22,14 @@ public class TargetInfo {
     public final double knockbackResist;
 
     public final boolean isRanged;
-    public final boolean armorPiercing; // layer-2 data (warden etc.); false until supplied (T4.6)
+    public final boolean armorPiercing; // layer-2 data (T4.6): supplied by Layer2Registry, not by name
     public final double hitboxWidth;
     public final double hitboxHeight;
     public final double reach;
-    public final double rangedRange;    // unknown (0) until observed (design 6.6)
+    public final double rangedRange;    // unknown (0) until observed (design 6.6) / layer-2 supplied
     public final boolean targetingUser;
+    /** Layer-2 data attached to this target (T4.6); {@code DEFAULT} for unknown mobs. */
+    public final com.aicompanion.bot.combat.Layer2Profile layer2Profile;
 
     public TargetInfo(LivingEntity entity, double distance, LivingEntity user) {
         this.entity = entity;
@@ -39,13 +41,20 @@ public class TargetInfo {
         this.moveSpeed = readAttr(entity, Attributes.MOVEMENT_SPEED);
         this.knockbackResist = readAttr(entity, Attributes.KNOCKBACK_RESISTANCE);
 
-        this.isRanged = entity instanceof RangedAttackMob;
-        this.armorPiercing = false;
+        // Layer-2 data (T4.6 / design 6.5): the unmeasurable facts come from the data table, keyed
+        // by profile — never from the mob's name. An unknown mob gets the 6.6 safe default.
+        com.aicompanion.bot.combat.Layer2Profile layer2 =
+                com.aicompanion.bot.combat.Layer2Registry.profileOf(entity);
+        this.layer2Profile = layer2;
+
+        this.isRanged = entity instanceof RangedAttackMob || layer2.rangedRangeXZ > 0.0;
+        this.armorPiercing = layer2.armorPiercing;
         this.hitboxWidth = entity.getBbWidth();
         this.hitboxHeight = entity.getBbHeight();
         // Melee reach ≈ half the attacker's width plus a standard arm span; refined later.
         this.reach = this.hitboxWidth * 0.5 + 2.0;
-        this.rangedRange = 0.0; // measured on first observed shot (6.6)
+        // 0 until observed (6.6); layer-2 supplies it for mobs whose range cannot be measured.
+        this.rangedRange = layer2.rangedRangeXZ;
 
         this.targetingUser = (user != null)
                 && (entity instanceof Mob mob)

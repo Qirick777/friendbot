@@ -24,8 +24,11 @@ import javax.annotation.Nullable;
 public class BotRangedCombat {
 
     private static final int DRAW_TICKS = 20;          // full charge (BowItem.MAX_DRAW_DURATION)
-    private static final double BAND_MIN = 6.0;        // kite: back away if the target closes inside
-    private static final double BAND_MAX = 20.0;       // kite: close in if the target drifts beyond
+    // Fallback band, used only when the target is not in perception this tick. Normally the band
+    // comes from rule 3 (T4.6): [bandMin, bandMax] computed from the target's measured reach and its
+    // layer-2 ranged range, so e.g. a warden is kited at the documented 16~20 instead of a constant.
+    private static final double BAND_MIN_FALLBACK = 6.0;
+    private static final double BAND_MAX_FALLBACK = 20.0;
     private static final double MAX_TARGET_VEL = 1.0;  // sanity clamp: ignore teleport/bounce deltas
 
     @Nullable
@@ -101,14 +104,26 @@ public class BotRangedCombat {
         double dist = Math.sqrt(dx * dx + dz * dz);
         int charge = bot.getTicksUsingItem();
         boolean steadying = charge >= DRAW_TICKS - 3;
+
+        // Rule 3 (T4.6): consume the tactical band for THIS target instead of a fixed constant.
+        double bandMin = BAND_MIN_FALLBACK;
+        double bandMax = BAND_MAX_FALLBACK;
+        for (com.aicompanion.bot.perception.TargetInfo ti : bot.perception().targets) {
+            if (ti.entity == t) {
+                bandMin = CombatRules.bandMin(ti);
+                bandMax = CombatRules.bandMax(ti);
+                break;
+            }
+        }
+
         bot.setSprinting(false);
         bot.setJumping(false);
         bot.xxa = 0.0F;
-        if (steadying) {
-            bot.zza = 0.0F;                 // steady aim at release
-        } else if (dist < BAND_MIN) {
+        if (steadying && dist >= bandMin) {
+            bot.zza = 0.0F;                 // steady aim at release (only when already safe)
+        } else if (dist < bandMin) {
             bot.zza = -1.0F;                // too close → back away (body faces target: -1 = retreat)
-        } else if (dist > BAND_MAX) {
+        } else if (dist > bandMax) {
             bot.zza = 1.0F;                 // too far → close in
         } else {
             bot.zza = 0.0F;                 // in band → hold
