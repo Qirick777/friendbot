@@ -138,7 +138,11 @@ public abstract class BotWardenTacticsTest implements BotTest {
                 }
             }
         }
-        return ctx.elapsedTicks >= 40;
+        // 80, not 40: SpeedObserver.MIN_SPAN_TICKS is 60, so judging at 40 asks rule 1 for a verdict
+        // before an observation can exist and always reads the conservative cold-start false. The
+        // last PASS here (kiting:true, speedBpt:0.0000) dates from when the minimum span was 20; the
+        // ch.18 correction raised window/min-span to 60 and left this harness judging too early.
+        return ctx.elapsedTicks >= 80;
     }
 
     @Override
