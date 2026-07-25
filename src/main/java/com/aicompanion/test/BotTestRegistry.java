@@ -24,13 +24,16 @@ import com.aicompanion.test.tests.BotPhase2ComboTest;
 import com.aicompanion.test.tests.BotProtectInterveneTest;
 import com.aicompanion.test.tests.BotProtectPriorityTest;
 import com.aicompanion.test.tests.BotRangedTest;
+import com.aicompanion.test.tests.BotRule1FastTest;
 import com.aicompanion.test.tests.BotSurvivalTest;
 import com.aicompanion.test.tests.BotTacticsTest;
 import com.aicompanion.test.tests.BotPersistLoadTest;
 import com.aicompanion.test.tests.BotPersistSaveTest;
 import com.aicompanion.test.tests.BotShieldTest;
+import com.aicompanion.test.tests.BotSpeedProbeTest;
 import com.aicompanion.test.tests.BotSingleTest;
 import com.aicompanion.test.tests.BotTotemTest;
+import com.aicompanion.test.tests.BotWardenBandReturnTest;
 import com.aicompanion.test.tests.BotWardenBandTest;
 import com.aicompanion.test.tests.BotWardenChargeTest;
 import com.aicompanion.test.tests.BotWardenProbeTest;
@@ -101,10 +104,14 @@ public final class BotTestRegistry {
         register("bot_catch_none", BotCatchNoneTest::new);
         // T4.6 warden layer-2 data (step-1 probe).
         register("bot_warden_probe", BotWardenProbeTest::new);
+        register("bot_speed_probe", BotSpeedProbeTest::new);
+        register("bot_rule1_fast", BotRule1FastTest::new);
         register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);
         register("bot_warden_noname", BotWardenTacticsTest.NoName::new);
         register("bot_warden_generic", BotWardenTacticsTest.Generic::new);
         register("bot_warden_band", BotWardenBandTest::new);
+        register("bot_warden_band_below", BotWardenBandReturnTest.Below::new);
+        register("bot_warden_band_above", BotWardenBandReturnTest.Above::new);
         register("bot_warden_charge", BotWardenChargeTest.Escape::new);
         register("bot_warden_charge_none", BotWardenChargeTest.None::new);
     }
