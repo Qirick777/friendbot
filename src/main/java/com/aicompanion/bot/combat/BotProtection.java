@@ -122,6 +122,30 @@ public class BotProtection {
             }
         }
 
+        // --- rule 2 (6.3 승패 게이트) — VETO over the 9.3 mode choice ------------------------
+        // 9.3 decides WHICH target and whether a bow is available; rule 2 decides whether entering
+        // melee is survivable at all ("근접 진입 가부"). Until now allowMelee had no live consumer,
+        // so the bot would close on anything 9.3 pointed it at, including a fight it loses. Goal 1
+        // (the user's survival) fails if the bot dies protecting them.
+        boolean allowMelee = CombatRules.allowMelee(chosen, CombatStats.of(bot),
+                CombatRules.DEFAULT_SAFETY);
+        if (useMelee && !allowMelee) {
+            useMelee = false;
+            LOGGER.info("[PROTECT] rule2 veto: melee denied on {} (allowMelee=false) -> ranged",
+                    chosen.entity.getType().toShortString());
+        }
+        // --- rule 1 (6.3 카이팅 가능성) — records the D cell for the ranged controller ----------
+        // canKite=false AND allowMelee=false is the cell design 6.3 does not define: rule 1 says
+        // "정면 대응" (which presumes melee) while rule 2 forbids melee. Decision taken and recorded
+        // in ch.6.3's appended block: keep melee denied, seek distance by available means, and if
+        // that fails withdraw toward the user. Rule 2 is a survival gate and the bot dying breaks
+        // goal 1, so where the two rules disagree the refusing one wins.
+        if (!allowMelee && !chosen.canKite) {
+            bot.rangedCombat().setDistanceCritical(true);
+        } else {
+            bot.rangedCombat().setDistanceCritical(false);
+        }
+
         assignTarget(bot, chosen.entity, useMelee);
         mode = useMelee ? Mode.ENGAGE_MELEE : Mode.ENGAGE_RANGED;
         LOGGER.info("[PROTECT] {} -> target={} dps={} targetsUser={} mode={} userHp={}",

@@ -39,12 +39,29 @@ public class CombatStats {
         this.sprintSpeed = sprintSpeed;
     }
 
-    /** Build from the bot: DPS = attack damage × attack speed; effective HP = current health. */
+    /**
+     * Build from the bot: DPS = attack damage × attack speed; effective HP = health scaled by armour
+     * damage reduction.
+     *
+     * <p>Effective HP used to be raw {@code getHealth()}, which ignored armour entirely. That was
+     * harmless only because rule 2 had no live consumer — nothing read {@code allowMelee}. Wiring
+     * rule 2 into the protection layer makes it load-bearing: an armoured bot would otherwise decline
+     * fights it can win, and design goal 1 (the user's survival) depends on the bot engaging when it
+     * can.</p>
+     *
+     * <p>Reduction uses the vanilla armour-points term (4% per point, capped at 80%). The full
+     * vanilla formula also has a toughness/damage term that reduces the cap against heavy hits; that
+     * refinement is left out deliberately — it needs the incoming damage value, which rule 2 does not
+     * have at the point it decides, and omitting it is the conservative direction (it never
+     * OVERstates survivability).</p>
+     */
     public static CombatStats of(LivingEntity bot) {
         double atk = readAttr(bot, Attributes.ATTACK_DAMAGE, 1.0);
         double speed = readAttr(bot, Attributes.ATTACK_SPEED, 4.0);
         double dps = atk * speed;
-        double effHp = bot.getHealth();
+        double armor = readAttr(bot, Attributes.ARMOR, 0.0);
+        double reduction = Math.min(0.80, armor * 0.04);
+        double effHp = bot.getHealth() / (1.0 - reduction);
         return new CombatStats(dps, effHp, BOT_SPRINT_SPEED);
     }
 

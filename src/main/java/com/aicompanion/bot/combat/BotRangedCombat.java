@@ -29,6 +29,14 @@ public class BotRangedCombat {
     // layer-2 ranged range, so e.g. a warden is kited at the documented 16~20 instead of a constant.
     private static final double BAND_MIN_FALLBACK = 6.0;
     private static final double BAND_MAX_FALLBACK = 20.0;
+
+    /**
+     * Rule 1's D cell — the target outruns the bot AND cannot be beaten in melee (design 6.3 defines
+     * neither jointly; see the appended 6.3 decision block). Backing away on foot cannot work by
+     * definition when {@code canKite=false}, so the controller must not spend the engagement walking
+     * backwards into contact. Set by the protection layer.
+     */
+    private boolean distanceCritical;
     private static final double MAX_TARGET_VEL = 1.0;  // sanity clamp: ignore teleport/bounce deltas
     /** Signal B — kiting counts as failing when the gap shrinks for this many consecutive ticks. */
     private static final int KITE_FAIL_TICKS = 10;
@@ -79,6 +87,15 @@ public class BotRangedCombat {
      * slow, stable capability estimate; this answers "is the kiting actually working right now" from
      * the gap trend, in a few ticks. The slow signal is allowed to be slow because this one is fast.
      */
+    /** Rule 1 D cell: distance must be made by means other than running. */
+    public void setDistanceCritical(boolean v) {
+        this.distanceCritical = v;
+    }
+
+    public boolean distanceCritical() {
+        return distanceCritical;
+    }
+
     public boolean kiteFailing() {
         return kiteFailing;
     }
@@ -141,13 +158,33 @@ public class BotRangedCombat {
         closingTicks = bot.kiteMonitor().closingTicks(t);
         kiteFailing = bot.kiteMonitor().failing(t);
 
+        // Rule 1 (6.3 카이팅 가능성) — consumed here. Until now the controller held the band for every
+        // target regardless of whether the bot could actually outrun it, which is what the rule
+        // exists to answer.
+        boolean kiteable = true;
+        for (com.aicompanion.bot.perception.TargetInfo ti : bot.perception().targets) {
+            if (ti.entity == t) {
+                kiteable = ti.canKite;
+                break;
+            }
+        }
+
         bot.setSprinting(false);
         bot.setJumping(false);
         bot.xxa = 0.0F;
         if (steadying && dist >= bandMin) {
             bot.zza = 0.0F;                 // steady aim at release (only when already safe)
         } else if (dist < bandMin) {
-            bot.zza = -1.0F;                // too close → back away (body faces target: -1 = retreat)
+            // Too close. Walking backwards only opens the gap if the bot is the faster one; when
+            // rule 1 says it is not, retreating on foot just feeds ground away while being chased.
+            // Strafe instead (lateral motion is not a race the bot loses) and let the D-cell path
+            // above make real distance by other means.
+            if (kiteable) {
+                bot.zza = -1.0F;            // back away (body faces target: -1 = retreat)
+            } else {
+                bot.zza = 0.0F;
+                bot.xxa = distanceCritical ? 1.0F : 0.0F;
+            }
         } else if (dist > bandMax) {
             bot.zza = 1.0F;                 // too far → close in
         } else {

@@ -127,7 +127,14 @@ public class BotReflex {
         boolean shieldInOff = bot.getOffhandItem().getItem() == Items.SHIELD;
         boolean axeEnemy = nearestEnemyHasAxe(bot);
 
-        if (incoming != null && shieldInOff && !axeEnemy) {
+        // Rule 4 (6.3 방패·넉백 유효성) — COMBINED, not substituted. useShield(t) answers "is a shield
+        // effective against this target at all" (layer-2 armour piercing); the existing conditions
+        // answer "can it be raised right now" (a shield is held, a projectile is actually inbound,
+        // and the enemy has no axe — vanilla axes disable shields). Replacing one with the other
+        // would drop whichever knowledge the other holds; the axe term in particular is not in
+        // rule 4. Moving the axe knowledge into Layer2Profile is registered as separate debt.
+        boolean ruleShield = ruleAllowsShield(bot, incoming);
+        if (incoming != null && shieldInOff && !axeEnemy && ruleShield) {
             // R1 shield: face the threat and raise the shield (off-hand use).
             Vec3 src = incoming.position();
             float faceYaw = yawTo(bot.getX(), bot.getZ(), src.x, src.z);
@@ -200,6 +207,26 @@ public class BotReflex {
      * job of the tactical band and the charge-escape reflex. Circle-strafing is for dodging actual
      * projectiles, so the test is "does it shoot things".
      */
+    /**
+     * Rule 4's half of the shield decision: is a shield effective against the thing shooting at us?
+     * Resolved against the projectile's owner when it is a tracked target, else against the nearest
+     * target — an unknown shooter defaults to "shield useful" per design 6.6 (관통 여부 모름 → 방패
+     * 유효 가정하되, 뚫리는 걸 관측하면 즉시 오프).
+     */
+    private static boolean ruleAllowsShield(AICompanionBot bot, @Nullable Projectile incoming) {
+        Entity owner = incoming == null ? null : incoming.getOwner();
+        TargetInfo nearest = null;
+        for (TargetInfo t : bot.perception().targets) {
+            if (owner != null && t.entity == owner) {
+                return CombatRules.useShield(t);
+            }
+            if (nearest == null || t.distance < nearest.distance) {
+                nearest = t;
+            }
+        }
+        return nearest == null || CombatRules.useShield(nearest);
+    }
+
     @Nullable
     private static Entity nearestRangedEnemy(AICompanionBot bot) {
         for (TargetInfo t : bot.perception().targets) {
