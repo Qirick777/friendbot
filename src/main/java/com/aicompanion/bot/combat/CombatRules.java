@@ -27,10 +27,23 @@ public final class CombatRules {
     private CombatRules() {
     }
 
-    /** Rule 1 hysteresis: become kiteable only well below the bot's sprint … */
-    public static final double KITE_ENTER_RATIO = 0.85;
-    /** … and stop being kiteable only once clearly at/above it, so the verdict cannot chatter. */
-    public static final double KITE_EXIT_RATIO = 0.95;
+    /**
+     * Rule 1 hysteresis, STRADDLING the spec threshold. Design 6.3 rule 1 is a plain strict
+     * inequality — 「적 속도 &lt; 봇 스프린트 속도 → 카이팅 성립」 — with no safety margin. An earlier
+     * one-sided band ([0.85, 0.95], entirely BELOW 1.0) silently added one, and it was large enough
+     * to swallow the warden's real 5.4% margin (measured 0.2653 vs sprint 0.2806) and report the
+     * opposite of what the design states. The band is therefore centred on 1.0, and its half-width
+     * comes from measurement noise at the chosen window: the near-threshold subject (warden) has
+     * 3σ ≈ 1.4% of the sprint speed at W60, so 3% is a comfortable margin over the noise without
+     * displacing the threshold itself.
+     *
+     * <p>The band must also not become a one-way latch: with a cold start of "not kiteable", a target
+     * sitting INSIDE the band would hold that false forever, so "hold previous" applies only once a
+     * real verdict has been established from a valid observation (see {@link #evaluateKite}).</p>
+     */
+    public static final double KITE_ENTER_RATIO = 0.97;
+    /** … and stop being kiteable only once clearly above it. */
+    public static final double KITE_EXIT_RATIO = 1.03;
 
     /**
      * Rule 1 — kiting is possible when the target is slower than the bot's sprint. The comparison is
@@ -52,8 +65,19 @@ public final class CombatRules {
      */
     public static boolean evaluateKite(double observedSpeed, boolean hasObservation,
                                        boolean previous, double botSprintSpeed) {
+        return evaluateKite(observedSpeed, hasObservation, previous, false, botSprintSpeed);
+    }
+
+    /**
+     * @param settled whether {@code previous} is a real verdict from an earlier valid observation
+     *                (as opposed to the cold-start default). Only a settled verdict may be held
+     *                inside the dead band; otherwise the cold-start "false" would latch forever for
+     *                any target whose speed happens to sit in the band.
+     */
+    public static boolean evaluateKite(double observedSpeed, boolean hasObservation,
+                                       boolean previous, boolean settled, double botSprintSpeed) {
         if (!hasObservation) {
-            return false; // cold-start prior: assume it can keep up
+            return false; // cold-start prior: assume it can keep up (conservative)
         }
         if (observedSpeed < botSprintSpeed * KITE_ENTER_RATIO) {
             return true;
@@ -61,7 +85,12 @@ public final class CombatRules {
         if (observedSpeed > botSprintSpeed * KITE_EXIT_RATIO) {
             return false;
         }
-        return previous; // inside the dead band → hold
+        // Inside the dead band: hold a settled verdict; with no settled verdict yet, decide on the
+        // midpoint instead of latching the cold-start value.
+        if (settled) {
+            return previous;
+        }
+        return observedSpeed < botSprintSpeed * ((KITE_ENTER_RATIO + KITE_EXIT_RATIO) * 0.5);
     }
 
     /**

@@ -43,6 +43,10 @@ public class Perception {
 
     /** Observed effective approach speeds (rule-1 input, design 6.6 관측 기반). */
     public final SpeedObserver speeds = new SpeedObserver();
+    /** The bot's own per-tick displacement — used to tell a valid observation from a pinned one. */
+    public double botDisplacementPerTick;
+    @Nullable
+    private Vec3 lastBotPos;
 
     /** Collect all facts for this tick. */
     public void gather(AICompanionBot bot) {
@@ -50,7 +54,11 @@ public class Perception {
         Vec3 botPos = bot.position();
         AABB box = bot.getBoundingBox().inflate(PERCEPTION_RANGE);
 
-        // Self.
+        // Self. Track our own movement first: a pinned bot makes target-speed samples meaningless.
+        botDisplacementPerTick = lastBotPos == null ? 0.0
+                : Math.hypot(botPos.x - lastBotPos.x, botPos.z - lastBotPos.z);
+        lastBotPos = botPos;
+
         botHealth = bot.getHealth();
         hunger = bot.getFoodData().getFoodLevel();
         foodSaturation = bot.getFoodData().getSaturationLevel();
@@ -75,11 +83,11 @@ public class Perception {
             double d = Math.sqrt(mob.distanceToSqr(botPos));
             // Rule-1 input is MEASURED, not read off an attribute: track this mob's real
             // displacement per tick and let the rule judge it against the bot's measured sprint.
-            speeds.observe(mob, bot.tickCount);
+            speeds.observe(mob, bot.tickCount, botDisplacementPerTick, d);
             double observed = speeds.effectiveSpeed(mob);
             boolean hasObs = speeds.hasObservation(mob);
             boolean kite = com.aicompanion.bot.combat.CombatRules.evaluateKite(
-                    observed, hasObs, speeds.kiteVerdict(mob),
+                    observed, hasObs, speeds.kiteVerdict(mob), speeds.isSettled(mob),
                     com.aicompanion.bot.combat.CombatStats.BOT_SPRINT_SPEED);
             speeds.setKiteVerdict(mob, kite);
             targets.add(new TargetInfo(mob, d, user, observed, hasObs, kite));

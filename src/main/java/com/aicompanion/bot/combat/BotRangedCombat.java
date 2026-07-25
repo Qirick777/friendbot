@@ -30,6 +30,10 @@ public class BotRangedCombat {
     private static final double BAND_MIN_FALLBACK = 6.0;
     private static final double BAND_MAX_FALLBACK = 20.0;
     private static final double MAX_TARGET_VEL = 1.0;  // sanity clamp: ignore teleport/bounce deltas
+    /** Signal B — kiting counts as failing when the gap shrinks for this many consecutive ticks. */
+    private static final int KITE_FAIL_TICKS = 10;
+    /** …at least this fast (blocks/tick) — slower drift is normal band correction, not a failure. */
+    private static final double KITE_FAIL_TREND = -0.02;
 
     @Nullable
     private LivingEntity target;
@@ -37,6 +41,8 @@ public class BotRangedCombat {
     private Vec3 prevTargetPos;
     private Vec3 targetVel = Vec3.ZERO;
     private int shotsFired;
+    private int closingTicks;      // consecutive ticks the target has been closing the gap
+    private boolean kiteFailing;   // signal B verdict: kiting is not working right now
 
     public void setTarget(@Nullable LivingEntity target) {
         if (target != this.target) {
@@ -64,6 +70,17 @@ public class BotRangedCombat {
         this.target = null;
         this.prevTargetPos = null;
         this.targetVel = Vec3.ZERO;
+        this.closingTicks = 0;
+        this.kiteFailing = false;
+    }
+
+    /**
+     * Signal B (execution monitor). Rule 1 answers "can this target be kited in principle" from a
+     * slow, stable capability estimate; this answers "is the kiting actually working right now" from
+     * the gap trend, in a few ticks. The slow signal is allowed to be slow because this one is fast.
+     */
+    public boolean kiteFailing() {
+        return kiteFailing;
     }
 
     /** Called from {@link AICompanionBot#tick()} (before the physics tick) when a ranged target is set. */
@@ -115,6 +132,15 @@ public class BotRangedCombat {
                 break;
             }
         }
+
+        // Signal B: watch whether the distance is actually being held/opened.
+        double trend = bot.perception().speeds.gapTrend(t);
+        if (trend < KITE_FAIL_TREND) {
+            closingTicks++;
+        } else {
+            closingTicks = 0;
+        }
+        kiteFailing = closingTicks >= KITE_FAIL_TICKS;
 
         bot.setSprinting(false);
         bot.setJumping(false);

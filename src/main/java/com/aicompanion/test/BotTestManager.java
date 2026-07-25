@@ -125,6 +125,49 @@ public final class BotTestManager {
         }
     }
 
+    /** Return the bot to a clean state so one trial cannot contaminate the next. */
+    private void resetBot() {
+        com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
+        if (bot == null) {
+            return;
+        }
+        bot.planner().stop();
+        bot.mover().stop();
+        bot.meleeCombat().stop();
+        bot.rangedCombat().stop();
+        bot.survival().reset();
+        bot.getInventory().clearContent();
+        bot.stopRiding();
+        bot.getPassengers().forEach(net.minecraft.world.entity.Entity::stopRiding);
+        bot.setInvulnerable(false);
+        bot.setSprinting(false);
+        bot.setShiftKeyDown(false);
+        bot.zza = 0.0F;
+        bot.xxa = 0.0F;
+        bot.setJumping(false);
+        bot.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        bot.fallDistance = 0.0F;
+        bot.getFoodData().setFoodLevel(20);
+        bot.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH)
+                .setBaseValue(20.0);
+        bot.setHealth(bot.getMaxHealth());
+        bot.moveTo(ctx.origin.getX() + 0.5, ctx.origin.getY(), ctx.origin.getZ() + 0.5, 0.0F, 0.0F);
+    }
+
+    /** 95% Wilson score interval lower bound for k successes out of n. */
+    private static double wilsonLowerBound(int k, int n) {
+        if (n <= 0) {
+            return 0.0;
+        }
+        double z = 1.96;
+        double p = (double) k / n;
+        double z2 = z * z;
+        double denom = 1.0 + z2 / n;
+        double centre = p + z2 / (2 * n);
+        double margin = z * Math.sqrt(p * (1 - p) / n + z2 / (4.0 * n * n));
+        return Math.max(0.0, (centre - margin) / denom);
+    }
+
     private void finish(BotTestResult r) {
         String name = active.name();
         int repeats = Math.max(1, active.repeats());
@@ -138,9 +181,13 @@ public final class BotTestManager {
             LOGGER.info("[BOTTEST] {} trial {}/{} {} measured={}",
                     name, trialIndex, repeats, r.pass() ? "PASS" : "FAIL", r.measured());
             if (trialIndex < repeats) {
-                // Next trial in the same server: wipe leftover entities so trials stay independent,
-                // then re-create the test object (per-trial state must not carry over).
+                // Next trial in the same server: trials must be independent. Wiping leftover
+                // entities is not enough — the BOT persists across trials, so its controller state
+                // (path, movement target, combat target, mount, inventory, health) leaks into the
+                // next trial. bot_path_reach exposed this: trial 1 passed and trials 2-3 failed at
+                // the identical stuck coordinate.
                 ctx.env.clearEntities(ctx.origin, 48.0);
+                resetBot();
                 BotTest next = BotTestRegistry.create(testName);
                 if (next != null) {
                     active = next;
@@ -150,11 +197,24 @@ public final class BotTestManager {
                 }
             }
             double rate = (double) trialsPassed / trialIndex;
-            boolean ok = rate >= active.successThreshold() - 1.0E-9;
-            String measured = String.format("trials:%d,passed:%d,successRate:%.2f|%s",
-                    trialIndex, trialsPassed, rate, String.join("|", trialLines));
-            String expected = String.format("successRate >= %.2f over %d trials — %s",
-                    active.successThreshold(), repeats, r.expected());
+            // Judge on the 95% Wilson score lower bound, not the raw rate: landing exactly on the
+            // threshold with a handful of trials is sampling luck, not evidence.
+            double lb = wilsonLowerBound(trialsPassed, trialIndex);
+            // A threshold of 1.00 is a DETERMINISTIC requirement ("no trial may fail"), not a rate
+            // estimate — and no finite-sample Wilson bound ever reaches 1.0, so applying the interval
+            // there would fail every such harness forever. Interval judging applies to the
+            // probabilistic harnesses (threshold < 1).
+            boolean deterministic = active.successThreshold() >= 1.0 - 1.0E-9;
+            boolean ok = deterministic ? trialsPassed == trialIndex
+                    : lb >= active.successThreshold() - 1.0E-9;
+            String measured = String.format("trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f|%s",
+                    trialIndex, trialsPassed, rate, lb, String.join("|", trialLines));
+            String expected = deterministic
+                    ? String.format("all %d trials pass (deterministic requirement) — %s",
+                            repeats, r.expected())
+                    : String.format(
+                            "95%% Wilson lower bound >= %.2f over %d trials (raw rate is not enough) — %s",
+                            active.successThreshold(), repeats, r.expected());
             r = new BotTestResult(ok, measured, expected);
         }
 

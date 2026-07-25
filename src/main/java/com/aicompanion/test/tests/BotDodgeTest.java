@@ -41,7 +41,7 @@ public class BotDodgeTest implements BotTest {
 
     @Override
     public int repeats() {
-        return 5;
+        return 15;
     }
 
     @Override

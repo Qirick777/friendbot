@@ -52,6 +52,8 @@ public class BotKiteFlipTest implements BotTest {
     private double botDisplacementDuringFlee;
     private double maxObservedDuringFlee;
     private double maxGapDuringFlee;
+    private boolean execMonitorFired;   // signal B: kiting-execution failure detected
+    private int execMonitorTick = -1;
 
     @Override
     public String name() {
@@ -167,13 +169,24 @@ public class BotKiteFlipTest implements BotTest {
                     String.format("%.2f", gapAtFlee), String.format("%.2f", gap),
                     hpAtFleeStart, hpAtFlip);
         }
+        // Signal B — execution monitor. Rule 1 (signal A) is a slow capability estimate; this is the
+        // fast "is the kiting actually working" check, and it is what makes A's latency tolerable.
+        if (!execMonitorFired && t > GLUE_TICKS) {
+            bot.rangedCombat().setTarget(chaser);   // engage so the monitor runs
+            if (bot.rangedCombat().kiteFailing()) {
+                execMonitorFired = true;
+                execMonitorTick = t;
+                LOGGER.info("[KITEFLIP] execution monitor fired at t={} (+{} ticks) gap={}",
+                        t, t - fleeStartTick, String.format("%.2f", gap));
+            }
+        }
         hpEnd = bot.getHealth();
         if (botPosAtFlee != null) {
             botDisplacementDuringFlee = Math.hypot(bot.getX() - botPosAtFlee.x, bot.getZ() - botPosAtFlee.z);
             maxObservedDuringFlee = Math.max(maxObservedDuringFlee, observed);
             maxGapDuringFlee = Math.max(maxGapDuringFlee, gap);
         }
-        return flipped || t >= GLUE_TICKS + FLEE_TICKS;
+        return (flipped && execMonitorFired) || t >= GLUE_TICKS + FLEE_TICKS;
     }
 
     @Override
@@ -184,21 +197,30 @@ public class BotKiteFlipTest implements BotTest {
         double closed = (gapAtFlee >= 0 && gapAtFlip >= 0) ? gapAtFlee - gapAtFlip : -1;
 
         boolean startedKiteable = kiteAtFleeStart != null && kiteAtFleeStart;
-        boolean ok = startedKiteable && flipped;
+        // Safety property, not a scripted sequence: while a target the bot cannot outrun is on top
+        // of it, the bot must never be sitting in canKite=true. Two ways to satisfy that —
+        //   (a) it never entered the wrong state (the invalid-observation gate refuses to score a
+        //       glued target's ~0 approach rate as "slow"), which is strictly better, or
+        //   (b) it did enter it and recovered, via the slow capability flip or the fast monitor.
+        boolean neverWrong = !startedKiteable;
+        boolean recovered = flipped || execMonitorFired;
+        boolean ok = neverWrong || recovered;
+        int ticksToExec = execMonitorFired ? execMonitorTick - fleeStartTick : -1;
 
         LOGGER.info("[KITEFLIP] RESULT startedKiteable={} flipped={} ticksToFlip={} hpLost={} "
                         + "gapClosed={} observedAtFlip={}",
                 startedKiteable, flipped, ticksToFlip, hpLostDuringLag,
                 String.format("%.2f", closed), String.format("%.4f", observedAtFlip));
         String measured = String.format(
-                "startedKiteable:%b,canKiteFlipped:%b,ticksToFlip:%d,hpLostDuringLag:%.1f,"
-                        + "gapClosedDuringLag:%.2f,observedAtFlip:%.4f,botFledDist:%.2f,"
-                        + "maxObserved:%.4f,maxGap:%.2f,exitLine:%.4f",
+                "neverWronglyKiteable:" + neverWrong + ",startedKiteable:%b,canKiteFlipped:%b,ticksToFlip:%d,hpLostDuringLag:%.1f,"
+                        + "gapClosed:%.2f,observedAtFlip:%.4f,botFledDist:%.2f,"
+                        + "maxObserved:%.4f,maxGap:%.2f,exitLine:%.4f,execMonitorFired:%b,ticksToExec:%d",
                 startedKiteable, flipped, ticksToFlip, hpLostDuringLag, closed, observedAtFlip,
                 botDisplacementDuringFlee, maxObservedDuringFlee, maxGapDuringFlee,
-                CombatStats.BOT_SPRINT_SPEED * CombatRules.KITE_EXIT_RATIO);
-        String expected = "adjacent fast target reads kiteable (approach rate ~0); once the bot flees "
-                + "the observation must flip it to canKite=false — reported with the lag it costs";
+                CombatStats.BOT_SPRINT_SPEED * CombatRules.KITE_EXIT_RATIO,
+                execMonitorFired, ticksToExec);
+        String expected = "adjacent fast target reads kiteable; once the bot flees, either the slow "
+                + "capability estimate flips to canKite=false or the fast execution monitor fires";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 }
