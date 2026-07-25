@@ -172,6 +172,11 @@ public final class BotTestManager {
                             now.mobs(), now.items(), now.projectiles(), now.nonAirBlocks(),
                             now.botState(), now.userState());
                 } else {
+                    String outer = TrialCanary.outerDiff(baseline, now);
+                    if (!outer.isEmpty()) {
+                        // Restored but not judged: reported so the ring never goes dark.
+                        LOGGER.info("[BOTTEST] canary outer-ring (restored, not judged): {}", outer);
+                    }
                     canaryDiff = TrialCanary.diff(baseline, now);
                     if (!canaryDiff.isEmpty()) {
                         canaryMismatches++;

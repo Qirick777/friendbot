@@ -38,6 +38,17 @@ public final class TrialCanary {
     /** Block signature region (stride 1). Covers the area harnesses actually build/modify. */
     private static final int BLOCK_R = 24;
     /**
+     * Region the canary JUDGES on. Restore stays wide (BLOCK_R) so real leftovers are still cleaned
+     * — bot_catch_fall's water sat at dx -24 — but only the core may fail a trial. Measured reason:
+     * every surviving mismatch was outside +/-8 with a COUNT THAT VARIED run to run
+     * (kite_flip 67~117 at (-15,+1,+21), protect_priority 294/253, creeper_wall 303/296,
+     * path_reach 97/78). That is water flowing back into the carved arena from surrounding terrain;
+     * fluid ticks are scheduled, not random, so randomTickSpeed=0 does not stop them and restore
+     * only puts blocks back for the water to flow again. Harness-built arenas all cover +/-8, so the
+     * core is the part the manager can actually guarantee.
+     */
+    private static final int JUDGE_R = 8;
+    /**
      * Floor level and up. Harnesses build floors at y-1 and everything else above it; y-2 and below
      * is untouched natural terrain that REACTS to the construction (measured: 544 sub-floor blocks
      * changed id 304->300 after trial 1's platform went down, identically every trial). That is the
@@ -48,7 +59,8 @@ public final class TrialCanary {
 
     public record Snapshot(int mobs, int items, int projectiles, int otherEntities, int players,
                            long blockHash, int nonAirBlocks, long dayTime,
-                           String botState, String userState, int[] blockIds) {
+                           String botState, String userState, int[] blockIds,
+                           String entityBreakdown) {
     }
 
     /**
@@ -102,10 +114,12 @@ public final class TrialCanary {
         int projectiles = 0;
         int other = 0;
         int players = 0;
+        java.util.TreeMap<String, Integer> byType = new java.util.TreeMap<>();
         for (Entity e : level.getEntities().getAll()) {
             if (!e.isAlive() || !box.contains(e.position())) {
                 continue;
             }
+            byType.merge(e.getType().toShortString(), 1, Integer::sum);
             if (e instanceof ServerPlayer) {
                 players++;
             } else if (e instanceof Mob) {
@@ -153,11 +167,18 @@ public final class TrialCanary {
             userState = String.format("pos(%.0f,%.0f,%.0f) hp%.1f veh%b",
                     user.getX(), user.getY(), user.getZ(), user.getHealth(), user.getVehicle() != null);
         }
+        StringBuilder bd = new StringBuilder();
+        for (var en : byType.entrySet()) {
+            if (bd.length() > 0) {
+                bd.append(',');
+            }
+            bd.append(en.getKey()).append('=').append(en.getValue());
+        }
         return new Snapshot(mobs, items, projectiles, other, players, hash, nonAir,
-                level.getDayTime(), botState, userState, ids);
+                level.getDayTime(), botState, userState, ids, bd.toString());
     }
 
-    /** Empty string when the trial starts from the baseline; otherwise a human-readable diff. */
+    /** Fatal diff: entity/bot/user state anywhere in range, plus blocks in the JUDGED core only. */
     public static String diff(Snapshot base, Snapshot now) {
         List<String> d = new ArrayList<>();
         if (base.mobs() != now.mobs()) {
@@ -175,31 +196,9 @@ public final class TrialCanary {
         if (base.players() != now.players()) {
             d.add("players " + base.players() + "->" + now.players());
         }
-        if (base.nonAirBlocks() != now.nonAirBlocks()) {
-            d.add("nonAirBlocks " + base.nonAirBlocks() + "->" + now.nonAirBlocks());
-        }
-        if (base.blockHash() != now.blockHash()) {
-            // "differs" is not actionable. Say how many sampled positions changed and name one, so a
-            // leak points at the block that caused it instead of at a hash.
-            int changed = 0;
-            String first = "?";
-            int[] a = base.blockIds();
-            int[] b = now.blockIds();
-            int span = 2 * BLOCK_R + 1;
-            int yspan = BLOCK_Y_HI - BLOCK_Y_LO + 1;
-            for (int i = 0; i < Math.min(a.length, b.length); i++) {
-                if (a[i] != b[i]) {
-                    changed++;
-                    if (changed == 1) {
-                        int dx = i / (span * yspan) - BLOCK_R;
-                        int rem = i % (span * yspan);
-                        int dz = rem / yspan - BLOCK_R;
-                        int dy = rem % yspan + BLOCK_Y_LO;
-                        first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[i], b[i]);
-                    }
-                }
-            }
-            d.add("blocks changed:" + changed + " first" + first);
+        if (!base.entityBreakdown().equals(now.entityBreakdown())) {
+            // Naming the type is what turns "otherEntities 0->1" into something actionable.
+            d.add("entities[" + base.entityBreakdown() + "] -> [" + now.entityBreakdown() + "]");
         }
         if (base.dayTime() != now.dayTime()) {
             d.add("dayTime " + base.dayTime() + "->" + now.dayTime());
@@ -210,6 +209,52 @@ public final class TrialCanary {
         if (!base.userState().equals(now.userState())) {
             d.add("user[" + base.userState() + "] -> [" + now.userState() + "]");
         }
+        String core = blockDiff(base, now, true);
+        if (!core.isEmpty()) {
+            d.add(core);
+        }
         return String.join("; ", d);
+    }
+
+    /**
+     * Non-fatal diff for the restore-but-do-not-judge ring. Narrowing the judged region without
+     * reporting this would mean leaks there get silently cleaned and never seen — and catch_fall's
+     * water lived exactly there.
+     */
+    public static String outerDiff(Snapshot base, Snapshot now) {
+        return blockDiff(base, now, false);
+    }
+
+    private static String blockDiff(Snapshot base, Snapshot now, boolean core) {
+        int[] a = base.blockIds();
+        int[] b = now.blockIds();
+        if (a == null || b == null) {
+            return "";
+        }
+        int span = 2 * BLOCK_R + 1;
+        int yspan = BLOCK_Y_HI - BLOCK_Y_LO + 1;
+        int changed = 0;
+        String first = "?";
+        for (int i = 0; i < Math.min(a.length, b.length); i++) {
+            if (a[i] == b[i]) {
+                continue;
+            }
+            int dx = i / (span * yspan) - BLOCK_R;
+            int rem = i % (span * yspan);
+            int dz = rem / yspan - BLOCK_R;
+            int dy = rem % yspan + BLOCK_Y_LO;
+            boolean inCore = Math.abs(dx) <= JUDGE_R && Math.abs(dz) <= JUDGE_R;
+            if (inCore != core) {
+                continue;
+            }
+            changed++;
+            if (changed == 1) {
+                first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[i], b[i]);
+            }
+        }
+        if (changed == 0) {
+            return "";
+        }
+        return (core ? "coreBlocks changed:" : "outerBlocks changed:") + changed + " first" + first;
     }
 }

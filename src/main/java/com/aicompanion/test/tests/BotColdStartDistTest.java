@@ -54,7 +54,7 @@ public class BotColdStartDistTest implements BotTest {
     private static final int ARENA = 48;
 
     private record Draw(double observed, boolean kite, int spawnDist, double gapAtObsStart,
-                        int ticksToVerdict, double pathRatio) {
+                        int ticksToVerdict, double pathRatio, int mobsPresent) {
     }
 
     private final List<Draw> draws = new ArrayList<>();
@@ -219,15 +219,20 @@ public class BotColdStartDistTest implements BotTest {
                         : Math.hypot(warden.getX() - pathFrom.x, warden.getZ() - pathFrom.z);
                 double ratio = net > 1.0E-6 ? pathSum / net : -1;
                 boolean kite = CombatRules.canKite(ti, CombatStats.of(bot).sprintSpeed);
+                // Mob census at the moment of the draw. The previous run had natural spawning on and
+                // never swept between engagements, so "did crowding bias this?" was inferential.
+                // Recorded here, it is a value.
+                int mobsNow = ctx.level.getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                        new net.minecraft.world.phys.AABB(ctx.origin).inflate(64.0)).size();
                 draws.add(new Draw(ti.observedSpeed, kite, spawnDist, gapAtObsStart,
-                        t - obsStartTick, ratio));
+                        t - obsStartTick, ratio, mobsNow));
                 recorded = true;
                 LOGGER.info("[COLDSTART] #{} observed={} ({}% of sprint) canKite={} spawnDist={} "
-                                + "gapAtObsStart={} ticks={} pathRatio={}",
+                                + "gapAtObsStart={} ticks={} pathRatio={} mobs={}",
                         draws.size(), String.format("%.4f", ti.observedSpeed),
                         String.format("%.1f", 100.0 * ti.observedSpeed / CombatStats.BOT_SPRINT_SPEED),
                         kite, spawnDist, String.format("%.1f", gapAtObsStart), t - obsStartTick,
-                        String.format("%.3f", ratio));
+                        String.format("%.3f", ratio), mobsNow);
             }
             break;
         }
@@ -272,6 +277,25 @@ public class BotColdStartDistTest implements BotTest {
                 nRatio++;
             }
         }
+        double meanMobs = draws.stream().mapToDouble(Draw::mobsPresent).average().orElse(0);
+        double covMobs = 0;
+        double varMobs = 0;
+        double covOrder = 0;
+        double varOrder = 0;
+        double meanOrder = (draws.size() + 1) / 2.0;
+        for (int i = 0; i < draws.size(); i++) {
+            Draw d = draws.get(i);
+            covMobs += (d.mobsPresent() - meanMobs) * (d.observed() - mean);
+            varMobs += (d.mobsPresent() - meanMobs) * (d.mobsPresent() - meanMobs);
+            covOrder += ((i + 1) - meanOrder) * (d.observed() - mean);
+            varOrder += ((i + 1) - meanOrder) * ((i + 1) - meanOrder);
+        }
+        double rMobs = (varMobs > 1.0E-9 && var > 1.0E-9)
+                ? covMobs / Math.sqrt(varMobs * var * (n - 1)) : 0;
+        double rOrder = (varOrder > 1.0E-9 && var > 1.0E-9)
+                ? covOrder / Math.sqrt(varOrder * var * (n - 1)) : 0;
+        int maxMobs = draws.stream().mapToInt(Draw::mobsPresent).max().orElse(0);
+        int minMobs = draws.stream().mapToInt(Draw::mobsPresent).min().orElse(0);
         double rDist = (varDist > 1.0E-9 && var > 1.0E-9)
                 ? covDist / Math.sqrt(varDist * var * (n - 1)) : 0;
         double rRatio = (varRatio > 1.0E-9 && var > 1.0E-9 && nRatio > 2)
@@ -284,8 +308,8 @@ public class BotColdStartDistTest implements BotTest {
 
         StringBuilder per = new StringBuilder();
         for (Draw d : draws) {
-            per.append(String.format("|%.4f/%b/d%d/r%.2f", d.observed(), d.kite(), d.spawnDist(),
-                    d.pathRatio()));
+            per.append(String.format("|%.4f/%b/d%d/r%.2f/m%d", d.observed(), d.kite(), d.spawnDist(),
+                    d.pathRatio(), d.mobsPresent()));
         }
         LOGGER.info("[COLDSTART] SUMMARY n={} mean={} sd={} min={} max={} enter={} 3sd={} "
                         + "distToLine={} stable={} rDist={} rRatio={}",
@@ -298,10 +322,11 @@ public class BotColdStartDistTest implements BotTest {
         String measured = String.format(
                 "n:%d,mean:%.4f(%.1f%%),sdBetweenRuns:%.4f,min:%.4f(%.1f%%),max:%.4f(%.1f%%),"
                         + "enterLine:%.4f,distMeanToLine:%.4f,3sd:%.4f,stable:%b,"
-                        + "canKiteTrue:%d/%d,aboveEnterLine:%d,rSpawnDist:%.2f,rPathRatio:%.2f",
+                        + "canKiteTrue:%d/%d,aboveEnterLine:%d,rSpawnDist:%.2f,rPathRatio:%.2f,"
+                        + "mobs:%d~%d,rMobs:%.2f,rTrialOrder:%.2f",
                 n, mean, 100.0 * mean / sprint, sd, min, 100.0 * min / sprint, max,
                 100.0 * max / sprint, enter, distToLine, 3 * sd, stable, kiteTrue, n, aboveEnter,
-                rDist, rRatio);
+                rDist, rRatio, minMobs, maxMobs, rMobs, rOrder);
         String expected = "distribution of the ONE observation each engagement's cold-start verdict "
                 + "is taken from; stable iff |mean - decision line| >= 3sd(between engagements)";
         return stable ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);

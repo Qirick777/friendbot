@@ -52,6 +52,8 @@ public class BotWindowVarianceTest implements BotTest {
     private Mob current;
     private String currentLabel = "";
     private final List<Vec3> samples = new ArrayList<>();
+    private int mobsAtPhaseEnd;
+    private int maxMobsDuringPhase;
 
     @Override
     public String name() {
@@ -123,6 +125,8 @@ public class BotWindowVarianceTest implements BotTest {
             Subject s = SUBJECTS.get(idx);
             currentLabel = s.label();
             samples.clear();
+            maxMobsDuringPhase = 0;
+            mobsAtPhaseEnd = 0;
             current = ctx.env.spawn(s.type(), new BlockPos(ctx.origin.getX() + START_DIST,
                     ctx.origin.getY(), ctx.origin.getZ()));
             if (current != null) {
@@ -145,6 +149,14 @@ public class BotWindowVarianceTest implements BotTest {
         if (local >= WARMUP && gap > STOP_GAP) {
             samples.add(current.position());
         }
+        // Mob census during the probe. This is a long single run, and "repeats==1 cannot leak" is
+        // only true of the between-trial reset — natural spawning accumulates INSIDE a run too, and
+        // that is a candidate explanation for the sd non-monotonicity this probe exists to settle.
+        if (local % 20 == 0) {
+            mobsAtPhaseEnd = ctx.level.getEntitiesOfClass(Mob.class,
+                    new net.minecraft.world.phys.AABB(ctx.origin).inflate(64.0)).size();
+            maxMobsDuringPhase = Math.max(maxMobsDuringPhase, mobsAtPhaseEnd);
+        }
         return false;
     }
 
@@ -159,7 +171,8 @@ public class BotWindowVarianceTest implements BotTest {
             report.add(currentLabel + " insufficient n=" + samples.size());
             return;
         }
-        StringBuilder line = new StringBuilder(currentLabel + " n=" + samples.size());
+        StringBuilder line = new StringBuilder(currentLabel + " n=" + samples.size()
+                + " mobsMax=" + maxMobsDuringPhase + " mobsEnd=" + mobsAtPhaseEnd);
         for (int w : WINDOWS) {
             if (samples.size() <= w) {
                 line.append(String.format("|W%d:insufficient", w));
