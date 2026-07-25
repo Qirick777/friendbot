@@ -35,6 +35,22 @@ public final class TestUser {
 
     public static ServerPlayer spawn(MinecraftServer server, ServerLevel level, BlockPos pos) {
         if (current != null && current.isAlive()) {
+            // Reuse the entity, but NOT its state. Returning it untouched made trial 1 of
+            // bot_escape_ride carry the user away and trials 2-3 run with a stale user sitting
+            // where trial 1 left it (userMoved:0.00, twice, identically).
+            current.stopRiding();
+            for (net.minecraft.world.entity.Entity p : new java.util.ArrayList<>(current.getPassengers())) {
+                p.stopRiding();
+            }
+            current.getInventory().clearContent();
+            current.setInvulnerable(false);
+            current.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            current.fallDistance = 0.0F;
+            current.getFoodData().setFoodLevel(20);
+            current.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH)
+                    .setBaseValue(20.0);
+            current.setHealth(20.0F);
+            current.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0.0F, 0.0F);
             return current;
         }
         GameProfile profile = new GameProfile(USER_UUID, USER_NAME);

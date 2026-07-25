@@ -53,6 +53,16 @@ public final class BotTestManager {
     private int trialIndex;
     private int trialsPassed;
     private final java.util.List<String> trialLines = new java.util.ArrayList<>();
+    /** Trial isolation contract: trial 1's post-setup state is the baseline every later trial must match. */
+    private TrialCanary.Snapshot baseline;
+    private String canaryDiff = "";
+
+    /**
+     * World time is standardised the same way difficulty is. Left alone it advances every tick, so a
+     * harness that does not set it would trip the canary every trial for a reason that is not a leak;
+     * pinned here, any drift the canary reports IS a leak.
+     */
+    public static final long STANDARD_DAYTIME = 18000L;
 
     private BotTestManager() {
     }
@@ -88,6 +98,8 @@ public final class BotTestManager {
         ServerLevel level = source != null ? source.getLevel() : server.overworld();
         BlockPos origin = source != null ? BlockPos.containing(source.getPosition()) : level.getSharedSpawnPos();
         this.active = test;
+        this.baseline = null;
+        this.canaryDiff = "";
         this.testName = name;
         this.trialIndex = 0;
         this.trialsPassed = 0;
@@ -118,9 +130,30 @@ public final class BotTestManager {
         }
         try {
             if (!setupDone) {
+                ctx.level.setDayTime(STANDARD_DAYTIME);
                 active.setup(ctx);
                 setupDone = true;
                 ctx.elapsedTicks = 0;
+                // Isolation contract. Trial 1 defines the baseline; every later trial must start
+                // from the same state, checked with values instead of assumed.
+                TrialCanary.Snapshot now = TrialCanary.capture(
+                        ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current());
+                if (baseline == null) {
+                    baseline = now;
+                    canaryDiff = "";
+                    LOGGER.info("[BOTTEST] canary baseline mobs={} items={} proj={} blocks={} bot=[{}] user=[{}]",
+                            now.mobs(), now.items(), now.projectiles(), now.nonAirBlocks(),
+                            now.botState(), now.userState());
+                } else {
+                    canaryDiff = TrialCanary.diff(baseline, now);
+                    if (!canaryDiff.isEmpty()) {
+                        LOGGER.warn("[BOTTEST] canary MISMATCH before trial {}: {}",
+                                trialIndex + 1, canaryDiff);
+                        finish(new BotTestResult(false, "canary:MISMATCH(" + canaryDiff + ")",
+                                "trial starts from the same state as trial 1 (isolation contract)"));
+                        return;
+                    }
+                }
                 return; // observe starting next tick
             }
             ctx.elapsedTicks++;
@@ -140,6 +173,31 @@ public final class BotTestManager {
     }
 
     /** Return the bot to a clean state so one trial cannot contaminate the next. */
+    /**
+     * The second fake player leaked exactly like the bot did: TestUser.spawn returns the live user
+     * untouched, so bot_escape_ride carried it 7.59 blocks in trial 1 and trials 2-3 then ran with a
+     * stale user out of trigger range (userMoved:0.00, twice, identically).
+     */
+    private void resetUser() {
+        net.minecraft.server.level.ServerPlayer user = TestUser.current();
+        if (user == null || !user.isAlive()) {
+            return;
+        }
+        user.stopRiding();
+        for (net.minecraft.world.entity.Entity p : new java.util.ArrayList<>(user.getPassengers())) {
+            p.stopRiding();
+        }
+        user.getInventory().clearContent();
+        user.setInvulnerable(false);
+        user.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        user.fallDistance = 0.0F;
+        user.getFoodData().setFoodLevel(20);
+        user.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH)
+                .setBaseValue(20.0);
+        user.setHealth(20.0F);
+        user.moveTo(ctx.origin.getX() + 0.5, ctx.origin.getY(), ctx.origin.getZ() + 0.5, 0.0F, 0.0F);
+    }
+
     private void resetBot() {
         com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
         if (bot == null) {
@@ -203,6 +261,7 @@ public final class BotTestManager {
                 // the identical stuck coordinate.
                 ctx.env.clearEntities(ctx.origin, 48.0);
                 resetBot();
+                resetUser();
                 BotTest next = BotTestRegistry.create(testName);
                 if (next != null) {
                     active = next;
@@ -224,8 +283,10 @@ public final class BotTestManager {
                     : active.successThreshold() - (SCREENING_MODE ? SCREENING_SLACK : 0.0);
             boolean ok = deterministic ? trialsPassed == trialIndex
                     : lb >= effective - 1.0E-9;
-            String measured = String.format("trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f|%s",
-                    trialIndex, trialsPassed, rate, lb, String.join("|", trialLines));
+            String measured = String.format(
+                    "trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f,canary:%s|%s",
+                    trialIndex, trialsPassed, rate, lb,
+                    trialIndex > 1 ? "OK" : "n/a", String.join("|", trialLines));
             String expected = deterministic
                     ? String.format("all %d trials pass (deterministic requirement) — %s",
                             repeats, r.expected())

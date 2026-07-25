@@ -60,6 +60,16 @@ public class BotKiteFlipTest implements BotTest {
         return "bot_kite_flip";
     }
 
+    /**
+     * Identical conditions moved this harness's diagnostics by 4x between runs (botFledDist
+     * 30.64 -> 6.82, gapClosed +0.08 -> -0.17), so a single trial cannot judge it. Deterministic
+     * requirement: every trial must hold the safety property.
+     */
+    @Override
+    public int repeats() {
+        return 10;
+    }
+
     @Override
     public int timeoutTicks() {
         return GLUE_TICKS + FLEE_TICKS + 60;

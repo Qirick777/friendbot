@@ -37,6 +37,7 @@ import com.aicompanion.test.tests.BotTotemTest;
 import com.aicompanion.test.tests.BotWardenBandReturnTest;
 import com.aicompanion.test.tests.BotWardenBandTest;
 import com.aicompanion.test.tests.BotWardenChargeTest;
+import com.aicompanion.test.tests.BotKiteApproachTest;
 import com.aicompanion.test.tests.BotKiteBandLatchTest;
 import com.aicompanion.test.tests.BotKiteExecLatencyTest;
 import com.aicompanion.test.tests.BotKiteExecMonitorTest;
@@ -120,6 +121,7 @@ public final class BotTestRegistry {
         register("bot_kite_execmon", BotKiteExecMonitorTest::new);
         register("bot_kite_execmon_lat", BotKiteExecLatencyTest::new);
         register("bot_coldstart_dist", BotColdStartDistTest::new);
+        register("bot_kite_approach", BotKiteApproachTest::new);
         register("bot_window_variance", BotWindowVarianceTest::new);
         register("bot_warden_live_speed", BotWardenLiveSpeedTest::new);
         register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);
