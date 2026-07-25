@@ -35,9 +35,9 @@ public class BotWindowVarianceTest implements BotTest {
 
     private static final int[] WINDOWS = {20, 40, 60, 100, 150, 200};
     private static final int STRIDE = 5;        // sliding-window step for the estimate series
-    private static final int PER_MOB = 520;
+    private static final int PER_MOB = 900;
     private static final int WARMUP = 60;       // spawn + emerge/roar settle
-    private static final int START_DIST = 60;
+    private static final int START_DIST = 100;
     private static final double STOP_GAP = 6.0; // stop sampling once it is on top of the bot
 
     private record Subject(String label, EntityType<? extends Mob> type) {
@@ -179,8 +179,24 @@ public class BotWindowVarianceTest implements BotTest {
             double var = est.stream().mapToDouble(e -> (e - mean) * (e - mean)).average().orElse(0);
             double sd = Math.sqrt(var);
             double cv = mean > 1.0E-9 ? sd / mean : -1;
-            line.append(String.format("|W%d: mean=%.4f sd=%.4f cv=%.3f n=%d(indep~%d)",
-                    w, mean, sd, cv, est.size(), Math.max(1, samples.size() / w)));
+            // Overlapping estimates are NOT independent: neighbouring windows share most of their
+            // samples, so their spread understates the real one and need not fall monotonically with
+            // w. sdIndep uses disjoint windows only — that is the honest number, and its estimate
+            // count (nIndep) says how much to trust it.
+            List<Double> ind = new ArrayList<>();
+            for (int i = 0; i + w < samples.size(); i += w) {
+                Vec3 a = samples.get(i);
+                Vec3 b = samples.get(i + w);
+                ind.add(Math.hypot(b.x - a.x, b.z - a.z) / w);
+            }
+            String indep = "n/a";
+            if (ind.size() >= 3) {
+                double m2 = ind.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+                double v2 = ind.stream().mapToDouble(e -> (e - m2) * (e - m2)).sum() / (ind.size() - 1);
+                indep = String.format("%.4f", Math.sqrt(v2));
+            }
+            line.append(String.format("|W%d: mean=%.4f sd=%.4f cv=%.3f n=%d sdIndep=%s nIndep=%d",
+                    w, mean, sd, cv, est.size(), indep, ind.size()));
         }
         LOGGER.info("[WINDOW] {}", line);
         report.add(line.toString());
