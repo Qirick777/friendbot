@@ -33,8 +33,8 @@ import java.util.List;
  */
 public final class TrialCanary {
 
-    /** Entity scan radius. Wider than the harness arenas' active area. */
-    private static final double ENTITY_RADIUS = 64.0;
+    /** Entity scan radius. The manager sweeps the same radius, so the two can never disagree. */
+    public static final double ENTITY_RADIUS = 64.0;
     /** Block signature region (stride 1). Covers the area harnesses actually build/modify. */
     private static final int BLOCK_R = 24;
     private static final int BLOCK_Y_LO = -2;
@@ -42,7 +42,19 @@ public final class TrialCanary {
 
     public record Snapshot(int mobs, int items, int projectiles, int otherEntities, int players,
                            long blockHash, int nonAirBlocks, long dayTime,
-                           String botState, String userState) {
+                           String botState, String userState, int[] blockIds) {
+    }
+
+    /**
+     * Remove item entities produced by arena construction. Placing a platform over natural terrain
+     * breaks grass/flowers and drops them on the first trial only, which the canary would otherwise
+     * report forever as "items 3 -> 0".
+     */
+    public static void sweepConstructionDebris(ServerLevel level, BlockPos origin) {
+        AABB box = new AABB(origin).inflate(ENTITY_RADIUS);
+        for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
+            e.discard();
+        }
     }
 
     private TrialCanary() {
@@ -74,6 +86,9 @@ public final class TrialCanary {
 
         long hash = 1125899906842597L;
         int nonAir = 0;
+        int span = 2 * BLOCK_R + 1;
+        int[] ids = new int[span * span * (BLOCK_Y_HI - BLOCK_Y_LO + 1)];
+        int at = 0;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int dx = -BLOCK_R; dx <= BLOCK_R; dx++) {
             for (int dz = -BLOCK_R; dz <= BLOCK_R; dz++) {
@@ -81,6 +96,7 @@ public final class TrialCanary {
                     p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
                     var state = level.getBlockState(p);
                     int id = net.minecraft.world.level.block.Block.getId(state);
+                    ids[at++] = id;
                     hash = hash * 31 + id;
                     if (!state.isAir()) {
                         nonAir++;
@@ -103,7 +119,7 @@ public final class TrialCanary {
                     user.getX(), user.getY(), user.getZ(), user.getHealth(), user.getVehicle() != null);
         }
         return new Snapshot(mobs, items, projectiles, other, players, hash, nonAir,
-                level.getDayTime(), botState, userState);
+                level.getDayTime(), botState, userState, ids);
     }
 
     /** Empty string when the trial starts from the baseline; otherwise a human-readable diff. */
@@ -128,7 +144,27 @@ public final class TrialCanary {
             d.add("nonAirBlocks " + base.nonAirBlocks() + "->" + now.nonAirBlocks());
         }
         if (base.blockHash() != now.blockHash()) {
-            d.add("blockHash differs");
+            // "differs" is not actionable. Say how many sampled positions changed and name one, so a
+            // leak points at the block that caused it instead of at a hash.
+            int changed = 0;
+            String first = "?";
+            int[] a = base.blockIds();
+            int[] b = now.blockIds();
+            int span = 2 * BLOCK_R + 1;
+            int yspan = BLOCK_Y_HI - BLOCK_Y_LO + 1;
+            for (int i = 0; i < Math.min(a.length, b.length); i++) {
+                if (a[i] != b[i]) {
+                    changed++;
+                    if (changed == 1) {
+                        int dx = i / (span * yspan) - BLOCK_R;
+                        int rem = i % (span * yspan);
+                        int dz = rem / yspan - BLOCK_R;
+                        int dy = rem % yspan + BLOCK_Y_LO;
+                        first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[i], b[i]);
+                    }
+                }
+            }
+            d.add("blocks changed:" + changed + " first" + first);
         }
         if (base.dayTime() != now.dayTime()) {
             d.add("dayTime " + base.dayTime() + "->" + now.dayTime());

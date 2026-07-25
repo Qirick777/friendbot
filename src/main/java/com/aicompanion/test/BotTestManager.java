@@ -113,6 +113,22 @@ public final class BotTestManager {
         // undistorted scale and the one the design's documented values are quoted at (18장 소닉붐
         // 고정 10 = exactly the NORMAL reading; EASY gives 6, HARD 15).
         server.setDifficulty(STANDARD_DIFFICULTY, true);
+        // Standardise the WORLD, not just the difficulty. The canary's first run showed the arena
+        // was never static: 5 -> 38 mobs accumulated from natural spawning during a single harness,
+        // and random block ticks (grass, leaves, fluids) drifted terrain between trials. Both make
+        // trials non-independent, and both are environment, not behaviour under test.
+        for (net.minecraft.server.level.ServerLevel lv : server.getAllLevels()) {
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING)
+                    .set(false, server);
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DAYLIGHT)
+                    .set(false, server);
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_WEATHER_CYCLE)
+                    .set(false, server);
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK)
+                    .set(false, server);
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_RANDOMTICKING)
+                    .set(0, server);
+        }
         LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
                 test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
                 test.repeats(), test.successThreshold());
@@ -131,11 +147,20 @@ public final class BotTestManager {
         try {
             if (!setupDone) {
                 ctx.level.setDayTime(STANDARD_DAYTIME);
+                if (baseline == null) {
+                    // Trial 1 must start from the same swept arena as trials 2..n, or the baseline
+                    // records world-gen leftovers that no later trial can reproduce.
+                    ctx.env.clearEntities(ctx.origin, TrialCanary.ENTITY_RADIUS);
+                }
                 active.setup(ctx);
                 setupDone = true;
                 ctx.elapsedTicks = 0;
                 // Isolation contract. Trial 1 defines the baseline; every later trial must start
                 // from the same state, checked with values instead of assumed.
+                // Building an arena over natural terrain drops item entities on the first trial and
+                // over flat stone on none of the others. That debris is a by-product of construction,
+                // not harness state, so it is swept before the snapshot on every trial alike.
+                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin);
                 TrialCanary.Snapshot now = TrialCanary.capture(
                         ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current());
                 if (baseline == null) {
@@ -259,7 +284,7 @@ public final class BotTestManager {
                 // (path, movement target, combat target, mount, inventory, health) leaks into the
                 // next trial. bot_path_reach exposed this: trial 1 passed and trials 2-3 failed at
                 // the identical stuck coordinate.
-                ctx.env.clearEntities(ctx.origin, 48.0);
+                ctx.env.clearEntities(ctx.origin, TrialCanary.ENTITY_RADIUS);
                 resetBot();
                 resetUser();
                 BotTest next = BotTestRegistry.create(testName);
