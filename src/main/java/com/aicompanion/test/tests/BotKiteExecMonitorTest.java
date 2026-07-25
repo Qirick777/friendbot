@@ -67,6 +67,7 @@ public class BotKiteExecMonitorTest implements BotTest {
     private double observedAtFlee;
     private int intentOpenTicks;      // did the bot ever ASK to open distance?
     private int maxFailingTicks;      // how close B came to its threshold
+    private int failingTicksTotal;    // failing ticks in TOTAL (not necessarily consecutive)
 
     @Override
     public String name() {
@@ -125,6 +126,7 @@ public class BotKiteExecMonitorTest implements BotTest {
         minGapDuringFlee = Double.MAX_VALUE;
         intentOpenTicks = 0;
         maxFailingTicks = 0;
+        failingTicksTotal = 0;
     }
 
     @Override
@@ -176,6 +178,11 @@ public class BotKiteExecMonitorTest implements BotTest {
             intentOpenTicks++;
         }
         maxFailingTicks = Math.max(maxFailingTicks, bot.kiteMonitor().closingTicks(chaser));
+        if (bot.kiteMonitor().intendedOpen()
+                && bot.perception().speeds.gapTrend(chaser)
+                        < com.aicompanion.bot.combat.KiteMonitor.MIN_OPENING_RATE) {
+            failingTicksTotal++;
+        }
 
         // Query the monitor itself, not the ranged controller's mirror: the whole point is that the
         // ranged branch may never run in this scenario.
@@ -218,10 +225,11 @@ public class BotKiteExecMonitorTest implements BotTest {
                 "startedKiteable:%b,execMonitorFired:%b,ticksToExec:%d,ceiling:%d,ticksToAFlip:%d,"
                         + "hpLostUntilExec:%.1f,hpLostTotal:%.1f,gapAtFlee:%.2f,gapAtExec:%.2f,"
                         + "gapClosed:%.2f,observedAtFlee:%.4f,intentOpenTicks:%d,maxFailingTicks:%d,"
+                        + "failingTicksTotal:%d,"
                         + "enterLine:%.4f",
                 startedKiteable, execMonitorFired, ticksToExec, EXEC_MAX_TICKS, ticksToA,
                 hpLostUntilExec, hpLostTotal, gapAtFlee, gapAtExec, gapClosed, observedAtFlee,
-                intentOpenTicks, maxFailingTicks,
+                intentOpenTicks, maxFailingTicks, failingTicksTotal,
                 CombatStats.BOT_SPRINT_SPEED * CombatRules.KITE_ENTER_RATIO);
         String expected = "with A's gate bypassed the bot really enters canKite=true on a target it "
                 + "cannot outrun; signal B must catch it within " + EXEC_MAX_TICKS

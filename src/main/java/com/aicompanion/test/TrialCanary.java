@@ -37,7 +37,13 @@ public final class TrialCanary {
     public static final double ENTITY_RADIUS = 64.0;
     /** Block signature region (stride 1). Covers the area harnesses actually build/modify. */
     private static final int BLOCK_R = 24;
-    private static final int BLOCK_Y_LO = -2;
+    /**
+     * Floor level and up. Harnesses build floors at y-1 and everything else above it; y-2 and below
+     * is untouched natural terrain that REACTS to the construction (measured: 544 sub-floor blocks
+     * changed id 304->300 after trial 1's platform went down, identically every trial). That is the
+     * world settling, not harness state, and including it made the canary cry wolf.
+     */
+    private static final int BLOCK_Y_LO = -1;
     private static final int BLOCK_Y_HI = 3;
 
     public record Snapshot(int mobs, int items, int projectiles, int otherEntities, int players,
@@ -54,6 +60,35 @@ public final class TrialCanary {
         AABB box = new AABB(origin).inflate(ENTITY_RADIUS);
         for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
             e.discard();
+        }
+    }
+
+    /**
+     * Restore the arena to the baseline block-for-block. Detection alone would leave the operator to
+     * clean up per harness, which is the entity-at-a-time treadmill this class exists to end: a
+     * harness that leaves water where it caught a falling user (measured: 21 blocks at y+1) is
+     * cleaned here generically, not by editing that harness.
+     */
+    public static void restore(ServerLevel level, BlockPos origin, Snapshot base) {
+        if (base == null || base.blockIds() == null) {
+            return;
+        }
+        int[] ids = base.blockIds();
+        int at = 0;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dx = -BLOCK_R; dx <= BLOCK_R; dx++) {
+            for (int dz = -BLOCK_R; dz <= BLOCK_R; dz++) {
+                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++) {
+                    if (at >= ids.length) {
+                        return;
+                    }
+                    p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+                    var want = net.minecraft.world.level.block.Block.stateById(ids[at++]);
+                    if (!level.getBlockState(p).equals(want)) {
+                        level.setBlock(p, want, 2);
+                    }
+                }
+            }
         }
     }
 

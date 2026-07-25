@@ -56,6 +56,7 @@ public final class BotTestManager {
     /** Trial isolation contract: trial 1's post-setup state is the baseline every later trial must match. */
     private TrialCanary.Snapshot baseline;
     private String canaryDiff = "";
+    private int canaryMismatches;
 
     /**
      * World time is standardised the same way difficulty is. Left alone it advances every tick, so a
@@ -100,6 +101,7 @@ public final class BotTestManager {
         this.active = test;
         this.baseline = null;
         this.canaryDiff = "";
+        this.canaryMismatches = 0;
         this.testName = name;
         this.trialIndex = 0;
         this.trialsPassed = 0;
@@ -172,6 +174,7 @@ public final class BotTestManager {
                 } else {
                     canaryDiff = TrialCanary.diff(baseline, now);
                     if (!canaryDiff.isEmpty()) {
+                        canaryMismatches++;
                         LOGGER.warn("[BOTTEST] canary MISMATCH before trial {}: {}",
                                 trialIndex + 1, canaryDiff);
                         finish(new BotTestResult(false, "canary:MISMATCH(" + canaryDiff + ")",
@@ -287,6 +290,7 @@ public final class BotTestManager {
                 ctx.env.clearEntities(ctx.origin, TrialCanary.ENTITY_RADIUS);
                 resetBot();
                 resetUser();
+                TrialCanary.restore(ctx.level, ctx.origin, baseline);
                 BotTest next = BotTestRegistry.create(testName);
                 if (next != null) {
                     active = next;
@@ -311,7 +315,9 @@ public final class BotTestManager {
             String measured = String.format(
                     "trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f,canary:%s|%s",
                     trialIndex, trialsPassed, rate, lb,
-                    trialIndex > 1 ? "OK" : "n/a", String.join("|", trialLines));
+                    trialIndex <= 1 ? "n/a"
+                            : canaryMismatches == 0 ? "OK" : ("MISMATCH x" + canaryMismatches),
+                    String.join("|", trialLines));
             String expected = deterministic
                     ? String.format("all %d trials pass (deterministic requirement) — %s",
                             repeats, r.expected())
