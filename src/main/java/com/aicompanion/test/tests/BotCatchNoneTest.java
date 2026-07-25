@@ -25,6 +25,8 @@ public class BotCatchNoneTest implements BotTest {
     private float hp0;
     private float minHp;
     private boolean everMounted;
+    private double botUserHoriz;   // control-condition distance (must be unreachable, see judge log)
+    private float maxFallDistance; // peak accumulated fallDistance, for the damage-formula check
 
     @Override
     public String name() {
@@ -76,6 +78,10 @@ public class BotCatchNoneTest implements BotTest {
         hp0 = user.getHealth();
         minHp = hp0;
         everMounted = false;
+        maxFallDistance = 0.0F;
+        // Record the control condition: the bot must be far enough that NO catch path could reach —
+        // so this control never depends on a catch path being broken.
+        botUserHoriz = Math.hypot(bot.getX() - user.getX(), bot.getZ() - user.getZ());
     }
 
     @Override
@@ -88,6 +94,9 @@ public class BotCatchNoneTest implements BotTest {
             double py = user.getY();
             double pz = user.getZ();
             user.doTick();
+            // fallDistance is read BEFORE doCheckFallDamage consumes/resets it on landing, so the
+            // peak here is exactly the value vanilla feeds into calculateFallDamage.
+            maxFallDistance = Math.max(maxFallDistance, user.fallDistance);
             user.doCheckFallDamage(user.getX() - px, user.getY() - py, user.getZ() - pz, user.onGround());
         } else {
             everMounted = true;
@@ -100,8 +109,15 @@ public class BotCatchNoneTest implements BotTest {
     public BotTestResult judge(BotTestContext ctx) {
         double damage = hp0 - minHp;
         boolean ok = !everMounted && damage > 0.5; // uncaught fall MUST hurt
-        String measured = String.format("mounted:%b,hp:%.1f->%.1f,damage:%.1f", everMounted, hp0, minHp, damage);
-        String expected = "no catch (bot far) → fall damage>0 (proves the catch was the cause in bot_catch_fall)";
+        // Vanilla: calculateFallDamage = ceil(fallDistance - 3). Logging the peak fallDistance
+        // pins whether an unexpected damage value comes from spawn/landing geometry (fall shorter
+        // than the nominal drop) or from fallDistance under-accumulating (the fake-player hazard).
+        double expectedDamage = Math.ceil(maxFallDistance - 3.0F);
+        String measured = String.format(
+                "mounted:%b,hp:%.1f->%.1f,damage:%.1f,fallDistance:%.2f,formulaDmg:%.0f,botUserHoriz:%.1f",
+                everMounted, hp0, minHp, damage, maxFallDistance, expectedDamage, botUserHoriz);
+        String expected = "no catch (bot far, horiz>>catch range) → fall damage>0 "
+                + "(proves the catch was the cause in bot_catch_fall)";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 }

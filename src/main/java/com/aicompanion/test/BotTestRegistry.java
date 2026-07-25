@@ -5,6 +5,7 @@ import com.aicompanion.test.tests.BotCatchFallTest;
 import com.aicompanion.test.tests.BotCatchNoneTest;
 import com.aicompanion.test.tests.BotCreeperLowFuseTest;
 import com.aicompanion.test.tests.BotCreeperWallTest;
+import com.aicompanion.test.tests.BotEscapeFarThreatTest;
 import com.aicompanion.test.tests.BotEscapeNoneTest;
 import com.aicompanion.test.tests.BotEscapeRideTest;
 import com.aicompanion.test.tests.BotDeathTest;
@@ -91,6 +92,7 @@ public final class BotTestRegistry {
         // T4.5 kidnap-escape + fall catch (mounting).
         register("bot_escape_ride", BotEscapeRideTest::new);
         register("bot_escape_none", BotEscapeNoneTest::new);
+        register("bot_escape_farthreat", BotEscapeFarThreatTest::new);
         register("bot_catch_fall", BotCatchFallTest::new);
         register("bot_catch_none", BotCatchNoneTest::new);
     }

@@ -42,12 +42,13 @@ echo ">>> [T4.5] step 1: ./gradlew build"
 BUILD_EXIT=$?
 echo "    build exit=$BUILD_EXIT"
 
-ER="FAIL"; EN="FAIL"; CF="FAIL"; CN="FAIL"
+ER="FAIL"; EN="FAIL"; EF="FAIL"; CF="FAIL"; CN="FAIL"
 if [ "$BUILD_EXIT" -eq 0 ]; then
-    run_test bot_escape_ride && ER="PASS"
-    run_test bot_escape_none && EN="PASS"
-    run_test bot_catch_fall  && CF="PASS"
-    run_test bot_catch_none  && CN="PASS"
+    run_test bot_escape_ride      && ER="PASS"
+    run_test bot_escape_none      && EN="PASS"
+    run_test bot_escape_farthreat && EF="PASS"
+    run_test bot_catch_fall       && CF="PASS"
+    run_test bot_catch_none       && CN="PASS"
 fi
 
 echo ">>> [T4.5] judge"
@@ -55,10 +56,11 @@ PASS=1
 [ "$BUILD_EXIT" -eq 0 ] || PASS=0
 [ "$ER" = "PASS" ] || PASS=0
 [ "$EN" = "PASS" ] || PASS=0
+[ "$EF" = "PASS" ] || PASS=0
 [ "$CF" = "PASS" ] || PASS=0
 [ "$CN" = "PASS" ] || PASS=0
-MEASURED="build:${BUILD_EXIT},escape_ride:${ER},escape_none:${EN},catch_fall:${CF},catch_none:${CN}"
-EXPECTED="build==0 AND escape_ride PASS(vehicle==bot+이동추종) AND escape_none PASS(>15% 미발동) AND catch_fall PASS(받기+체력불변) AND catch_none PASS(대조 데미지)"
+MEASURED="build:${BUILD_EXIT},escape_ride:${ER},escape_none:${EN},escape_farthreat:${EF},catch_fall:${CF},catch_none:${CN}"
+EXPECTED="build==0 AND escape_ride PASS(vehicle==bot+이동추종) AND escape_none PASS(16% 경계 미발동) AND escape_farthreat PASS(위협>18 미발동) AND catch_fall PASS(받기+체력불변) AND catch_none PASS(대조 데미지)"
 if [ "$PASS" -eq 1 ]; then
     echo "[BOTTEST] T4.5 PASS measured=${MEASURED} expected=${EXPECTED}"; exit 0
 else

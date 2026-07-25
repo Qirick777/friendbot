@@ -15,24 +15,31 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * T4.5 [검증] (a) CONTROL: identical to bot_escape_ride but the user is HEALTHY (&gt;15%). The escape
- * mount must NOT trigger — {@code user.getVehicle()} stays null the whole time. This proves the
- * kidnap-escape fires only below the critical line, not indiscriminately.
+ * T4.5 escape CONTROL for the threat-proximity gate: the user IS critical (≤15%) with no throwable
+ * potion, but the only threat sits OUTSIDE the release line (&gt;18 blocks). The kidnap-escape must
+ * NOT trigger — 도주 is "flee a threat", and without a nearby threat there is nothing to flee, which
+ * is also what stops the mount↔dismount oscillation. PASS iff getVehicle() stays null.
+ *
+ * <p>Note: the THREAT(12)/SAFE(18) distances are implementation-chosen tuning values, not design
+ * numbers — see AI_Bot_Design.md ch.18 파라미터 총람.</p>
  */
-public class BotEscapeNoneTest implements BotTest {
+public class BotEscapeFarThreatTest implements BotTest {
+
+    private static final int THREAT_X = 25; // > SAFE_ESCAPE_DIST (18) → outside the release line
 
     private Zombie enemy;
     private ServerPlayer user;
     private boolean everMounted;
+    private double minThreatDist = Double.MAX_VALUE;
 
     @Override
     public String name() {
-        return "bot_escape_none";
+        return "bot_escape_farthreat";
     }
 
     @Override
     public int timeoutTicks() {
-        return 120;
+        return 140;
     }
 
     @Override
@@ -43,7 +50,7 @@ public class BotEscapeNoneTest implements BotTest {
         }
         BlockPos o = ctx.origin;
         ctx.level.setDayTime(18000L);
-        for (int dx = -8; dx <= 8; dx++) {
+        for (int dx = -8; dx <= THREAT_X + 4; dx++) {
             for (int dz = -4; dz <= 4; dz++) {
                 ctx.level.setBlockAndUpdate(new BlockPos(o.getX() + dx, o.getY() - 1, o.getZ() + dz),
                         Blocks.STONE.defaultBlockState());
@@ -56,24 +63,24 @@ public class BotEscapeNoneTest implements BotTest {
 
         user = TestUser.spawn(ctx.server, ctx.level, o);
         user.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0);
-        // 16% — just ABOVE the 15% critical line, so this control proves the BOUNDARY itself
-        // (a full-health user would only prove "healthy users aren't kidnapped").
-        user.setHealth(3.2F);
+        user.setHealth(2.0F);        // 10% — critical, same as bot_escape_ride
         user.setInvulnerable(true);
 
         bot.survival().reset();
         bot.setInvulnerable(true);
         bot.setDeltaMovement(Vec3.ZERO);
         bot.moveTo(o.getX() - 1.5, o.getY(), o.getZ() + 0.5, 90.0F, 0.0F);
-        bot.getInventory().clearContent();
+        bot.getInventory().clearContent(); // no throwable potion — only the distance gate differs
         bot.meleeCombat().stop();
         bot.rangedCombat().stop();
 
-        enemy = ctx.env.spawn(EntityType.ZOMBIE, new BlockPos(o.getX() + 5, o.getY(), o.getZ()));
+        // Threat parked far outside the release line; stationary so the distance stays > 18.
+        enemy = ctx.env.spawn(EntityType.ZOMBIE, new BlockPos(o.getX() + THREAT_X, o.getY(), o.getZ()));
         if (enemy != null) {
             enemy.setNoAi(true);
         }
         everMounted = false;
+        minThreatDist = Double.MAX_VALUE;
     }
 
     @Override
@@ -81,18 +88,21 @@ public class BotEscapeNoneTest implements BotTest {
         if (user != null && user.getVehicle() != null) {
             everMounted = true;
         }
-        return ctx.elapsedTicks >= 100;
+        if (user != null && enemy != null) {
+            minThreatDist = Math.min(minThreatDist, enemy.position().distanceTo(user.position()));
+        }
+        return ctx.elapsedTicks >= 120;
     }
 
     @Override
     public BotTestResult judge(BotTestContext ctx) {
-        boolean ok = !everMounted; // a user just above the critical line must never be kidnapped
         float hp = user != null ? user.getHealth() : -1;
         float max = user != null ? user.getMaxHealth() : 1;
-        String measured = String.format("everMounted:%b,userHp:%.1f(%.0f%%),threatDist:%.1f",
-                everMounted, hp, (hp / max) * 100,
-                (user != null && enemy != null) ? enemy.position().distanceTo(user.position()) : -1);
-        String expected = "user 16% (>15% 경계 바로 위) + threat near → no escape mount (getVehicle stays null)";
+        boolean threatStayedFar = minThreatDist > 18.0;
+        boolean ok = !everMounted && threatStayedFar;
+        String measured = String.format("everMounted:%b,userHp:%.0f%%,threatDist:%.1f",
+                everMounted, (hp / max) * 100, minThreatDist);
+        String expected = "user<=15% but threat outside release line (>18) → no escape mount";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 }
