@@ -34,6 +34,12 @@ public final class BotTestManager {
     private BotTestContext ctx;
     private boolean setupDone;
 
+    // --- statistical repetition (audit item 4): trials run in-process, one aggregate verdict ---
+    private String testName;
+    private int trialIndex;
+    private int trialsPassed;
+    private final java.util.List<String> trialLines = new java.util.ArrayList<>();
+
     private BotTestManager() {
     }
 
@@ -68,6 +74,10 @@ public final class BotTestManager {
         ServerLevel level = source != null ? source.getLevel() : server.overworld();
         BlockPos origin = source != null ? BlockPos.containing(source.getPosition()) : level.getSharedSpawnPos();
         this.active = test;
+        this.testName = name;
+        this.trialIndex = 0;
+        this.trialsPassed = 0;
+        this.trialLines.clear();
         this.ctx = new BotTestContext(server, level, origin, source);
         this.setupDone = false;
         // Every harness runs at ONE difficulty. The bot is a ServerPlayer, so Player.hurt applies
@@ -77,8 +87,9 @@ public final class BotTestManager {
         // undistorted scale and the one the design's documented values are quoted at (18장 소닉붐
         // 고정 10 = exactly the NORMAL reading; EASY gives 6, HARD 15).
         server.setDifficulty(STANDARD_DIFFICULTY, true);
-        LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={}",
-                test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY);
+        LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
+                test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
+                test.repeats(), test.successThreshold());
         return true;
     }
 
@@ -116,6 +127,37 @@ public final class BotTestManager {
 
     private void finish(BotTestResult r) {
         String name = active.name();
+        int repeats = Math.max(1, active.repeats());
+
+        if (repeats > 1) {
+            trialIndex++;
+            if (r.pass()) {
+                trialsPassed++;
+            }
+            trialLines.add(String.format("t%d:%s(%s)", trialIndex, r.pass() ? "P" : "F", r.measured()));
+            LOGGER.info("[BOTTEST] {} trial {}/{} {} measured={}",
+                    name, trialIndex, repeats, r.pass() ? "PASS" : "FAIL", r.measured());
+            if (trialIndex < repeats) {
+                // Next trial in the same server: wipe leftover entities so trials stay independent,
+                // then re-create the test object (per-trial state must not carry over).
+                ctx.env.clearEntities(ctx.origin, 48.0);
+                BotTest next = BotTestRegistry.create(testName);
+                if (next != null) {
+                    active = next;
+                    setupDone = false;
+                    ctx.elapsedTicks = 0;
+                    return;
+                }
+            }
+            double rate = (double) trialsPassed / trialIndex;
+            boolean ok = rate >= active.successThreshold() - 1.0E-9;
+            String measured = String.format("trials:%d,passed:%d,successRate:%.2f|%s",
+                    trialIndex, trialsPassed, rate, String.join("|", trialLines));
+            String expected = String.format("successRate >= %.2f over %d trials — %s",
+                    active.successThreshold(), repeats, r.expected());
+            r = new BotTestResult(ok, measured, expected);
+        }
+
         String verdict = r.pass() ? "PASS" : "FAIL";
         // Authoritative judgment line (R.2 format).
         LOGGER.info("[BOTTEST] {} {} measured={} expected={}", name, verdict, r.measured(), r.expected());

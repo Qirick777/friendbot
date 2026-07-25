@@ -19,6 +19,16 @@ public class BotPathReachTest implements BotTest {
     private BlockPos goal;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_path_reach";
     }

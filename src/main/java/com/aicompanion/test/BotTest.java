@@ -22,6 +22,26 @@ public interface BotTest {
         return 200;
     }
 
+    /**
+     * How many independent trials the manager runs before judging (statistical harnesses).
+     * 1 = deterministic single-shot. Override for anything whose outcome depends on mob AI,
+     * firing timing or pathfinding success, so a lucky single run cannot be mistaken for a PASS.
+     */
+    default int repeats() {
+        return 1;
+    }
+
+    /**
+     * Fraction of trials that must pass when {@link #repeats()} &gt; 1.
+     *
+     * <p>DISCIPLINE: derive this from what the spec demands, never from the current measured
+     * success rate. Lowering it to fit today's numbers converts a functional defect into a
+     * green light.</p>
+     */
+    default double successThreshold() {
+        return 1.0;
+    }
+
     /** Create the environment. Called once, on the server thread, before observation. */
     void setup(BotTestContext ctx);
 

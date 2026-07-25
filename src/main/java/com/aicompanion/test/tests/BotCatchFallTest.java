@@ -35,6 +35,16 @@ public class BotCatchFallTest implements BotTest {
     private int mountTick = -1;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_catch_fall";
     }

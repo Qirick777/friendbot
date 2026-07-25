@@ -40,6 +40,16 @@ public class BotCreeperLowFuseTest implements BotTest {
     private double distAtTeleport = -1;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_creeper_lowfuse";
     }

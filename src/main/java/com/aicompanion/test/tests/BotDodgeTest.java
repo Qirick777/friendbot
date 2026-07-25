@@ -33,6 +33,21 @@ public class BotDodgeTest implements BotTest {
     private float minHp;
     private double maxLateral;
     private final Set<Integer> arrowIds = new HashSet<>();
+    // Diagnostics (audit item 4): lateral distance alone has no diagnostic power — PASS and FAIL
+    // runs overlap on it. These separate "evade never fired" from "evade fired but the arrow hit".
+    private int hitEvents;          // distinct health-drop events = arrows that landed
+    private int evadeTicks;         // ticks the R1 evade actually drove movement
+    private float prevHp;
+
+    @Override
+    public int repeats() {
+        return 5;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 0.80;
+    }
 
     @Override
     public String name() {
@@ -87,7 +102,10 @@ public class BotDodgeTest implements BotTest {
         startPos = bot.position();
         startHp = bot.getHealth();
         minHp = startHp;
+        prevHp = startHp;
         maxLateral = 0;
+        hitEvents = 0;
+        evadeTicks = 0;
         arrowIds.clear();
     }
 
@@ -101,8 +119,16 @@ public class BotDodgeTest implements BotTest {
             skeleton.setTarget(bot); // keep it shooting at the bot
         }
         float hp = bot.getHealth();
+        if (hp < prevHp - 0.01) {
+            hitEvents++;
+        }
+        prevHp = hp;
         if (hp < minHp) {
             minHp = hp;
+        }
+        // The evade owns movement when it runs, and it is the only layer that sprints here.
+        if (bot.isSprinting()) {
+            evadeTicks++;
         }
         double lateral = Math.abs(bot.getZ() - startPos.z);
         if (lateral > maxLateral) {
@@ -124,8 +150,9 @@ public class BotDodgeTest implements BotTest {
         boolean sidestepped = maxLateral > 1.0;        // evasion actually moved the bot
 
         boolean ok = fired && unharmed && sidestepped;
-        String measured = String.format("arrows:%d,hp:%.1f->%.1f(min),lateral:%.2f",
-                arrows, startHp, minHp, maxLateral);
+        String measured = String.format(
+                "arrows:%d,hits:%d,evadeTicks:%d,hp:%.1f->%.1f(min),lateral:%.2f",
+                arrows, hitEvents, evadeTicks, startHp, minHp, maxLateral);
         String expected = "arrows>=3 AND hp unchanged (no hit) AND lateral>1.0 (sidestep occurred)";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }

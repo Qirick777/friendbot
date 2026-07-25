@@ -30,6 +30,16 @@ public class BotMeleeTest implements BotTest {
     private int hits;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_melee";
     }

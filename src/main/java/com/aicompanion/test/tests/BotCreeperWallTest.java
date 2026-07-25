@@ -33,6 +33,16 @@ public class BotCreeperWallTest implements BotTest {
     private boolean recorded;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_creeper_wall";
     }

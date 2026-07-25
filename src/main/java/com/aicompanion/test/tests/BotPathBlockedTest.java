@@ -23,6 +23,16 @@ public class BotPathBlockedTest implements BotTest {
     private int expansions;
 
     @Override
+    public int repeats() {
+        return 3;
+    }
+
+    @Override
+    public double successThreshold() {
+        return 1.00;
+    }
+
+    @Override
     public String name() {
         return "bot_path_blocked";
     }
