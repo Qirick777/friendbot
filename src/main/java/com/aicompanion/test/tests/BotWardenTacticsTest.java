@@ -133,7 +133,7 @@ public abstract class BotWardenTacticsTest implements BotTest {
             for (TargetInfo t : bot.perception().targets) {
                 if (t.entity == target) {
                     decision = CombatRules.evaluate(t, CombatStats.of(bot));
-                    measuredSpeedBpt = CombatStats.mobSpeedBlocksPerTick(t.moveSpeed);
+                    measuredSpeedBpt = t.observedSpeed;
                     break;
                 }
             }

@@ -21,6 +21,10 @@ import java.util.Deque;
  */
 public final class BotTestManager {
 
+    /** Single difficulty every harness runs at (see start()). */
+    public static final net.minecraft.world.Difficulty STANDARD_DIFFICULTY =
+            net.minecraft.world.Difficulty.NORMAL;
+
     public static final BotTestManager INSTANCE = new BotTestManager();
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -66,7 +70,15 @@ public final class BotTestManager {
         this.active = test;
         this.ctx = new BotTestContext(server, level, origin, source);
         this.setupDone = false;
-        LOGGER.info("[BOTTEST] {} START origin={} timeout={}t", test.name(), origin, test.timeoutTicks());
+        // Every harness runs at ONE difficulty. The bot is a ServerPlayer, so Player.hurt applies
+        // difficulty scaling to any DamageScaling.ALWAYS / WHEN_CAUSED_BY_LIVING_NON_PLAYER source
+        // (EASY: amount/2+1, NORMAL: amount, HARD: amount*1.5). Harnesses that judge by damage size
+        // would otherwise measure different numbers depending on server.properties. NORMAL is the
+        // undistorted scale and the one the design's documented values are quoted at (18장 소닉붐
+        // 고정 10 = exactly the NORMAL reading; EASY gives 6, HARD 15).
+        server.setDifficulty(STANDARD_DIFFICULTY, true);
+        LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={}",
+                test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY);
         return true;
     }
 

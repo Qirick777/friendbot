@@ -41,6 +41,9 @@ public class Perception {
     @Nullable
     public ServerPlayer user;
 
+    /** Observed effective approach speeds (rule-1 input, design 6.6 관측 기반). */
+    public final SpeedObserver speeds = new SpeedObserver();
+
     /** Collect all facts for this tick. */
     public void gather(AICompanionBot bot) {
         ServerLevel level = (ServerLevel) bot.level();
@@ -70,8 +73,18 @@ public class Perception {
         // The bot is a ServerPlayer, never a Mob, so it is not part of this query.
         for (Mob mob : level.getEntitiesOfClass(Mob.class, box, m -> m.isAlive())) {
             double d = Math.sqrt(mob.distanceToSqr(botPos));
-            targets.add(new TargetInfo(mob, d, user));
+            // Rule-1 input is MEASURED, not read off an attribute: track this mob's real
+            // displacement per tick and let the rule judge it against the bot's measured sprint.
+            speeds.observe(mob, bot.tickCount);
+            double observed = speeds.effectiveSpeed(mob);
+            boolean hasObs = speeds.hasObservation(mob);
+            boolean kite = com.aicompanion.bot.combat.CombatRules.evaluateKite(
+                    observed, hasObs, speeds.kiteVerdict(mob),
+                    com.aicompanion.bot.combat.CombatStats.BOT_SPRINT_SPEED);
+            speeds.setKiteVerdict(mob, kite);
+            targets.add(new TargetInfo(mob, d, user, observed, hasObs, kite));
         }
+        speeds.prune(bot.tickCount);
         targets.sort((a, b) -> Double.compare(a.distance, b.distance));
 
         // Incoming projectiles: heading toward the bot.

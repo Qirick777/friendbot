@@ -28,10 +28,24 @@ public class TargetInfo {
     public final double reach;
     public final double rangedRange;    // unknown (0) until observed (design 6.6) / layer-2 supplied
     public final boolean targetingUser;
+    /** Observed effective approach speed, blocks/tick (displacement ÷ ticks, stationary included). */
+    public final double observedSpeed;
+    /** Whether {@link #observedSpeed} is backed by a filled observation window. */
+    public final boolean speedObserved;
+    /** Rule-1 verdict computed from the observation with hysteresis (cold start = false). */
+    public final boolean canKite;
     /** Layer-2 data attached to this target (T4.6); {@code DEFAULT} for unknown mobs. */
     public final com.aicompanion.bot.combat.Layer2Profile layer2Profile;
 
     public TargetInfo(LivingEntity entity, double distance, LivingEntity user) {
+        this(entity, distance, user, 0.0, false, false);
+    }
+
+    public TargetInfo(LivingEntity entity, double distance, LivingEntity user,
+                      double observedSpeed, boolean speedObserved, boolean canKite) {
+        this.observedSpeed = observedSpeed;
+        this.speedObserved = speedObserved;
+        this.canKite = canKite;
         this.entity = entity;
         this.distance = distance;
 

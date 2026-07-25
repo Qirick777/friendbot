@@ -27,13 +27,41 @@ public final class CombatRules {
     private CombatRules() {
     }
 
+    /** Rule 1 hysteresis: become kiteable only well below the bot's sprint … */
+    public static final double KITE_ENTER_RATIO = 0.85;
+    /** … and stop being kiteable only once clearly at/above it, so the verdict cannot chatter. */
+    public static final double KITE_EXIT_RATIO = 0.95;
+
     /**
-     * Rule 1 — kiting is possible when the target is slower than the bot's sprint. Both sides are
-     * in blocks/tick: the target's raw MOVEMENT_SPEED attribute is converted first, because the
-     * attribute is not a b/t figure (see {@link CombatStats#MOB_ATTR_TO_BLOCKS_PER_TICK}).
+     * Rule 1 — kiting is possible when the target is slower than the bot's sprint. The comparison is
+     * measured-vs-measured, both in blocks/tick: the target's OBSERVED effective approach speed
+     * (displacement ÷ elapsed ticks, stationary ticks included) against the bot's measured sprint.
      */
     public static boolean canKite(TargetInfo t, double botSprintSpeed) {
-        return CombatStats.mobSpeedBlocksPerTick(t.moveSpeed) < botSprintSpeed;
+        return t.canKite;
+    }
+
+    /**
+     * Pure rule-1 verdict with hysteresis. Cold start (no usable observation yet) is the
+     * CONSERVATIVE answer, {@code false} = 정면 대응: mistaking a fast mob for a slow one makes the
+     * bot turn its back and get run down, which costs far more than the opposite mistake.
+     *
+     * @param observedSpeed  target's observed effective approach speed, blocks/tick
+     * @param hasObservation whether the observation window is filled enough to trust
+     * @param previous       the previous verdict for this target (sticky, for hysteresis)
+     */
+    public static boolean evaluateKite(double observedSpeed, boolean hasObservation,
+                                       boolean previous, double botSprintSpeed) {
+        if (!hasObservation) {
+            return false; // cold-start prior: assume it can keep up
+        }
+        if (observedSpeed < botSprintSpeed * KITE_ENTER_RATIO) {
+            return true;
+        }
+        if (observedSpeed > botSprintSpeed * KITE_EXIT_RATIO) {
+            return false;
+        }
+        return previous; // inside the dead band → hold
     }
 
     /**

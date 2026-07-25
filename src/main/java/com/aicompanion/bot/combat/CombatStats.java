@@ -17,18 +17,17 @@ public class CombatStats {
      */
     public static final double BOT_SPRINT_SPEED = 0.2806;
 
-    /**
-     * Mob {@code MOVEMENT_SPEED} attribute → blocks/tick conversion. The attribute is NOT in
-     * blocks/tick: bot_warden_probe measured a warden (attribute 0.30) travelling 0.0471 b/t, i.e.
-     * a factor of 0.157. Without this, rule 1 compared an attribute against a b/t figure and got
-     * "warden is as fast as a sprinting player", contradicting design 6.5.
+    /*
+     * NOTE: there is deliberately NO attribute→blocks/tick conversion constant any more.
+     * Measured ratios (peak ÷ attribute) ranged 0.496 (zombie) … 1.688 (a speed-0.8 zombie), a 3.4×
+     * spread that rises with the attribute, because effective speed is MOVEMENT_SPEED × an AI task
+     * speed multiplier that differs per mob and per AI state. The reverse direction is impossible
+     * too: a sprinting player's attribute (0.13) is BELOW a zombie's (0.23) while the measured
+     * speeds are the other way round (0.2806 vs 0.1142) — player and mob attributes are different
+     * units. Rule 1 therefore consumes an OBSERVED effective approach speed
+     * ({@link com.aicompanion.bot.perception.SpeedObserver}); the attribute survives only as a
+     * cold-start prior, and that prior is the conservative one (not kiteable).
      */
-    public static final double MOB_ATTR_TO_BLOCKS_PER_TICK = 0.157;
-
-    /** Convert a mob's movement-speed attribute into blocks/tick (rule-1 comparable). */
-    public static double mobSpeedBlocksPerTick(double movementSpeedAttribute) {
-        return movementSpeedAttribute * MOB_ATTR_TO_BLOCKS_PER_TICK;
-    }
 
     public final double dps;
     public final double effectiveHp;

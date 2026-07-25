@@ -2,7 +2,6 @@ package com.aicompanion.test.tests;
 
 import com.aicompanion.bot.AICompanionBot;
 import com.aicompanion.bot.BotManager;
-import com.aicompanion.bot.combat.CombatStats;
 import com.aicompanion.test.BotTest;
 import com.aicompanion.test.BotTestContext;
 import com.aicompanion.test.BotTestResult;
@@ -46,7 +45,9 @@ public class BotSpeedProbeTest implements BotTest {
             new Subject("spider", EntityType.SPIDER),
             new Subject("iron_golem", EntityType.IRON_GOLEM),
             new Subject("skeleton", EntityType.SKELETON),
-            new Subject("warden", EntityType.WARDEN));
+            new Subject("warden", EntityType.WARDEN),
+            new Subject("piglin_brute", EntityType.PIGLIN_BRUTE),
+            new Subject("wither", EntityType.WITHER));
 
     private static final class Result {
         String label;
@@ -229,8 +230,7 @@ public class BotSpeedProbeTest implements BotTest {
                     r.label, r.attr, r.meanAll, r.peakStep, r.movingFrac, ratio, r.peakStep > botSprint));
         }
         double spread = maxRatio > 0 ? maxRatio / minRatio : -1;
-        sb.append(String.format("|ratioSpread:%.2fx|currentFactor:%.3f",
-                spread, CombatStats.MOB_ATTR_TO_BLOCKS_PER_TICK));
+        sb.append(String.format("|ratioSpread:%.2fx", spread));
         LOGGER.info("[SPEEDPROBE] SUMMARY {}", sb);
 
         boolean ok = results.size() == SUBJECTS.size() && botTicks > 10;

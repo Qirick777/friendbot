@@ -33,7 +33,7 @@ public class BotRule1FastTest implements BotTest {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final int BOT_PHASE = 100;
-    private static final int START_DIST = 30;
+    private static final int START_DIST = 50;
     private static final int WARMUP = 40;
     private static final int WINDOW = 100;
     /** Fast enough that its measured speed clearly beats the bot's sprint (zombie ratio ≈0.5). */
@@ -45,8 +45,12 @@ public class BotRule1FastTest implements BotTest {
     private int botTicks;
     private Vec3 lastMobPos;
     private double peakStep;
-    private double sumStep;
-    private int stepTicks;
+    private Vec3 windowStartPos;
+    private int windowStartTick = -1;
+    private Vec3 windowEndPos;
+    private int windowEndTick = -1;
+    private double effective;
+    private double botObservedSpeed;
     private Boolean canKite;
     private double attrSeen;
 
@@ -141,16 +145,36 @@ public class BotRule1FastTest implements BotTest {
         double step = Math.hypot(p.x - lastMobPos.x, p.z - lastMobPos.z);
         lastMobPos = p;
         int local = t - BOT_PHASE;
+        // Reference measurement, same definition the bot's observer uses: horizontal DISPLACEMENT
+        // divided by ELAPSED ticks (stationary ticks included). Measuring stops once the mob is on
+        // top of the bot, since after that it has nowhere left to close.
+        double gap = Math.hypot(p.x - bot.getX(), p.z - bot.getZ());
         if (local >= WARMUP && local < WARMUP + WINDOW) {
             peakStep = Math.max(peakStep, step);
-            sumStep += step;
-            stepTicks++;
+            if (windowStartTick < 0) {
+                windowStartTick = local;
+                windowStartPos = p;
+            }
+            if (gap > 4.0) {
+                windowEndTick = local;
+                windowEndPos = p;
+            }
+        }
+        if (windowStartPos != null && windowEndPos != null && windowEndTick > windowStartTick) {
+            effective = Math.hypot(windowEndPos.x - windowStartPos.x, windowEndPos.z - windowStartPos.z)
+                    / (windowEndTick - windowStartTick);
         }
 
-        for (TargetInfo ti : bot.perception().targets) {
-            if (ti.entity == fast) {
-                canKite = CombatRules.canKite(ti, CombatStats.of(bot).sprintSpeed);
-                break;
+        // Read the verdict WHILE the target is still closing. Once it is on top of the bot its
+        // approach rate is legitimately ~0 (nothing left to close), so a sample taken then would
+        // say "slow" about a mob that just ran the bot down.
+        if (gap > 4.0) {
+            for (TargetInfo ti : bot.perception().targets) {
+                if (ti.entity == fast) {
+                    canKite = CombatRules.canKite(ti, CombatStats.of(bot).sprintSpeed);
+                    botObservedSpeed = ti.observedSpeed;
+                    break;
+                }
             }
         }
         return local >= WARMUP + WINDOW;
@@ -159,22 +183,22 @@ public class BotRule1FastTest implements BotTest {
     @Override
     public BotTestResult judge(BotTestContext ctx) {
         double botSprint = botDist / Math.max(1, botTicks);
-        double mean = stepTicks > 0 ? sumStep / stepTicks : 0;
-        boolean actuallyFaster = peakStep > botSprint;
+        boolean actuallyFaster = effective > botSprint;
         boolean ruleSaysKite = canKite != null && canKite;
         // The rule must agree with the measurement: a target that outruns the bot cannot be kited.
         boolean ok = canKite != null && (ruleSaysKite == !actuallyFaster);
 
-        LOGGER.info("[RULE1] attr={} measuredPeak={} b/t measuredMean={} b/t botSprint={} b/t "
-                        + "actuallyFaster={} canKite={} conversionFactor={}",
-                f(attrSeen), f(peakStep), f(mean), f(botSprint), actuallyFaster, canKite,
-                CombatStats.MOB_ATTR_TO_BLOCKS_PER_TICK);
+        LOGGER.info("[RULE1] attr={} measuredEffective={} b/t (displacement/ticks) peak={} b/t "
+                        + "botSprint={} b/t actuallyFaster={} canKite={} observedByBot={}",
+                f(attrSeen), f(effective), f(peakStep), f(botSprint), actuallyFaster, canKite,
+                f(botObservedSpeed));
         String measured = String.format(
-                "attr:%.2f,measuredPeak:%.4f,botSprint:%.4f,actuallyFaster:%b,canKite:%s,factor:%.3f",
-                attrSeen, peakStep, botSprint, actuallyFaster, String.valueOf(canKite),
-                CombatStats.MOB_ATTR_TO_BLOCKS_PER_TICK);
-        String expected = "canKite == (measured target peak < measured bot sprint) — rule 1 must "
-                + "agree with the measured speeds, i.e. a faster target gives canKite=false";
+                "attr:%.2f,measuredEffective:%.4f,peak:%.4f,botSprint:%.4f,actuallyFaster:%b,"
+                        + "canKite:%s,botObserved:%.4f",
+                attrSeen, effective, peakStep, botSprint, actuallyFaster, String.valueOf(canKite),
+                botObservedSpeed);
+        String expected = "canKite == (measured target effective approach speed < measured bot "
+                + "sprint) — a target that outruns the bot must give canKite=false";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 
