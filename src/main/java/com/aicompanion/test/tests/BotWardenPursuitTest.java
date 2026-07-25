@@ -66,6 +66,26 @@ public class BotWardenPursuitTest implements BotTest {
     private double trailingRate;
     private final java.util.ArrayDeque<double[]> trail = new java.util.ArrayDeque<>();
 
+    // --- gap diagnostics: is the warden CLOSING, or matching pace sideways? -------------------
+    // A-signal measures the target's ABSOLUTE displacement. With the bot holding a band and turning,
+    // that displacement mixes an approach component with a lateral tracking component, and 0.2766
+    // cannot distinguish "running me down" from "circling with me". This is rule 1's actual question:
+    // if the warden closes, it is not kiteable and design 6.5's inference fails; if it only tracks
+    // laterally, kiting holds and absolute displacement is the wrong quantity for rule 1.
+    /** (tick, gap, wardenX, wardenZ) for the trailing window. */
+    private final java.util.ArrayDeque<double[]> gapTrail = new java.util.ArrayDeque<>();
+    private double gapAtFlightStart = -1;
+    private double gapAtDraw = -1;
+    private double gapWindowStart = -1;
+    private double gapMin = Double.MAX_VALUE;
+    private double gapMax = -1;
+    private double gapAtEnd = -1;
+    private double approachSum;      // warden displacement projected onto the bot-facing axis
+    private double lateralSum;       // ... and perpendicular to it
+    private double botPathLen;       // cumulative, vs botFled which is NET displacement
+    private Vec3 lastBotPos;
+    private Vec3 lastWardenPos;
+
     @Override
     public int[] arenaBounds() {
         return new int[]{-94, 30, -14, 14};
@@ -140,6 +160,18 @@ public class BotWardenPursuitTest implements BotTest {
         trailingRate = 0;
         draw = -1;
         movingTicks = 0;
+        gapTrail.clear();
+        gapAtFlightStart = -1;
+        gapAtDraw = -1;
+        gapWindowStart = -1;
+        gapMin = Double.MAX_VALUE;
+        gapMax = -1;
+        gapAtEnd = -1;
+        approachSum = 0;
+        lateralSum = 0;
+        botPathLen = 0;
+        lastBotPos = null;
+        lastWardenPos = null;
     }
 
     @Override
@@ -161,6 +193,38 @@ public class BotWardenPursuitTest implements BotTest {
         }
         if (botStart == null) {
             botStart = bot.position();
+        }
+        double gap = Math.hypot(warden.getX() - bot.getX(), warden.getZ() - bot.getZ());
+        if (gapAtFlightStart < 0) {
+            gapAtFlightStart = gap;
+        }
+        gapAtEnd = gap;
+        gapMin = Math.min(gapMin, gap);
+        gapMax = Math.max(gapMax, gap);
+        if (lastBotPos != null) {
+            botPathLen += Math.hypot(bot.getX() - lastBotPos.x, bot.getZ() - lastBotPos.z);
+        }
+        if (lastWardenPos != null) {
+            // Decompose this tick's warden movement about the bot->warden axis.
+            double ax = warden.getX() - bot.getX();
+            double az = warden.getZ() - bot.getZ();
+            double alen = Math.hypot(ax, az);
+            if (alen > 1.0E-6) {
+                double ux = ax / alen;
+                double uz = az / alen;
+                double dx = warden.getX() - lastWardenPos.x;
+                double dz = warden.getZ() - lastWardenPos.z;
+                double radial = dx * ux + dz * uz;      // + = moving away from the bot
+                double lateral = dx * (-uz) + dz * ux;  // perpendicular
+                approachSum += -radial;                 // + = closing on the bot
+                lateralSum += Math.abs(lateral);
+            }
+        }
+        lastBotPos = bot.position();
+        lastWardenPos = warden.position();
+        gapTrail.addLast(new double[]{t, gap});
+        while (!gapTrail.isEmpty() && t - gapTrail.peekFirst()[0] > SpeedObserver.WINDOW_TICKS) {
+            gapTrail.removeFirst();
         }
         // The bot's own disengage path: engaging hands movement to the ranged controller, which keeps
         // the rule-3 band and therefore retreats from a closing warden.
@@ -191,6 +255,8 @@ public class BotWardenPursuitTest implements BotTest {
                     if (draw < 0 && movingTicks >= SpeedObserver.MIN_SPAN_TICKS) {
                         // First valid window taken entirely while the bot was in flight.
                         draw = ti.observedSpeed;
+                        gapAtDraw = gap;
+                        gapWindowStart = gapTrail.isEmpty() ? gap : gapTrail.peekFirst()[1];
                         LOGGER.info("[PURSUIT] draw={} at t={} movingTicks={} botFled={}",
                                 String.format("%.4f", draw), t, movingTicks,
                                 String.format("%.2f", botFled));
@@ -216,13 +282,25 @@ public class BotWardenPursuitTest implements BotTest {
         boolean gotDraw = draw >= 0;
         boolean ok = enoughMotion && gotDraw;
 
-        LOGGER.info("[PURSUIT] RESULT draw={} runMean={} movingTicks={} botFled={} samples={}",
-                String.format("%.4f", draw), String.format("%.4f", runMean), movingTicks,
-                String.format("%.2f", botFled), n);
+        double windowSpan = gapWindowStart >= 0 ? gapAtDraw - gapWindowStart : Double.NaN;
+        double dGapDt = gapWindowStart >= 0 ? windowSpan / SpeedObserver.WINDOW_TICKS : Double.NaN;
+        double gapNet = gapAtFlightStart >= 0 ? gapAtEnd - gapAtFlightStart : Double.NaN;
+        LOGGER.info("[PURSUIT] RESULT draw={} gap {}->{} (net {}) windowDelta={} approach={} "
+                        + "lateral={} botPath={} botFled={}",
+                String.format("%.4f", draw), String.format("%.2f", gapAtFlightStart),
+                String.format("%.2f", gapAtEnd), String.format("%+.2f", gapNet),
+                String.format("%+.2f", windowSpan), String.format("%+.2f", approachSum),
+                String.format("%.2f", lateralSum), String.format("%.2f", botPathLen),
+                String.format("%.2f", botFled));
         String measured = String.format(
-                "draw:%.4f,runMean:%.4f,movingTicks:%d,botFled:%.2f,samples:%d,indepTrailing:%.4f,"
+                "draw:%.4f,runMean:%.4f,movingTicks:%d,botFled:%.2f,botPathLen:%.2f,samples:%d,"
+                        + "indepTrailing:%.4f,gapFlightStart:%.2f,gapWindowStart:%.2f,gapAtDraw:%.2f,"
+                        + "gapWindowDelta:%+.2f,dGapDt:%+.5f,gapMin:%.2f,gapMax:%.2f,gapAtEnd:%.2f,"
+                        + "gapNet:%+.2f,approachSum:%+.2f,lateralSum:%.2f,"
                         + "stationaryRef:%.4f,delta:%+.4f,botSprint:%.4f",
-                draw, runMean, movingTicks, botFled, n, trailingRate, STATIONARY_REFERENCE,
+                draw, runMean, movingTicks, botFled, botPathLen, n, trailingRate,
+                gapAtFlightStart, gapWindowStart, gapAtDraw, windowSpan, dGapDt, gapMin, gapMax,
+                gapAtEnd, gapNet, approachSum, lateralSum, STATIONARY_REFERENCE,
                 draw >= 0 ? draw - STATIONARY_REFERENCE : Double.NaN, CombatStats.BOT_SPRINT_SPEED);
         String expected = "premise: >=" + SpeedObserver.MIN_SPAN_TICKS + " ticks in motion and one "
                 + "valid in-flight window — the pursuit rate itself is reported, never gated";
