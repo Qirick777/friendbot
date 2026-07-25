@@ -168,7 +168,9 @@ public class BotKiteExecMonitorTest implements BotTest {
         bot.rangedCombat().setTarget(chaser);
         minGapDuringFlee = Math.min(minGapDuringFlee, gap);
 
-        if (!execMonitorFired && bot.rangedCombat().kiteFailing()) {
+        // Query the monitor itself, not the ranged controller's mirror: the whole point is that the
+        // ranged branch may never run in this scenario.
+        if (!execMonitorFired && bot.kiteMonitor().failing(chaser)) {
             execMonitorFired = true;
             execTick = t;
             hpAtExec = bot.getHealth();

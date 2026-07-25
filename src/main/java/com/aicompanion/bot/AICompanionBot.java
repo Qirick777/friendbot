@@ -29,6 +29,9 @@ public class AICompanionBot extends ServerPlayer {
             new com.aicompanion.bot.combat.BotSurvival();
     private final com.aicompanion.bot.combat.BotReflex reflex =
             new com.aicompanion.bot.combat.BotReflex();
+    /** Signal B (kiting execution monitor). Evaluated above EVERY branch — see KiteMonitor. */
+    private final com.aicompanion.bot.combat.KiteMonitor kiteMonitor =
+            new com.aicompanion.bot.combat.KiteMonitor();
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
@@ -61,6 +64,10 @@ public class AICompanionBot extends ServerPlayer {
     }
 
     /** Reflex layer (T4.2). */
+    public com.aicompanion.bot.combat.KiteMonitor kiteMonitor() {
+        return kiteMonitor;
+    }
+
     public com.aicompanion.bot.combat.BotReflex reflex() {
         return reflex;
     }
@@ -107,6 +114,12 @@ public class AICompanionBot extends ServerPlayer {
         // getting outside its range is the only thing that helps against a piercing hit.
         boolean chargeEscaping = reflex.tickChargeEscape(this);
         boolean evading = chargeEscaping || reflex.tickR1(this);
+
+        // Signal B (design 6.6 실행 감시): evaluated here, above every branch. It used to live in
+        // BotRangedCombat.tick, so it only ran when the ranged branch owned the tick — measured
+        // consequence in bot_kite_execmon: a fast mob glued to the bot goes to the melee branch and
+        // B was never evaluated at all while the bot lost 31.7 HP.
+        kiteMonitor.tick(this);
 
         // Environment reflex (T4.4): fall survival (R2) drops water/blocks under a fatal fall
         // (no movement ownership); creeper defense places a blast wall or shields+flees.

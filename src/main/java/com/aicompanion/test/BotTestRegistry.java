@@ -4,6 +4,7 @@ import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotCatchFallTest;
 import com.aicompanion.test.tests.BotCatchNoneTest;
 import com.aicompanion.test.tests.BotCreeperLowFuseTest;
+import com.aicompanion.test.tests.BotColdStartDistTest;
 import com.aicompanion.test.tests.BotCreeperWallTest;
 import com.aicompanion.test.tests.BotEscapeFarThreatTest;
 import com.aicompanion.test.tests.BotEscapeNoneTest;
@@ -118,6 +119,7 @@ public final class BotTestRegistry {
         register("bot_kite_recover", BotKiteRecoverTest::new);
         register("bot_kite_execmon", BotKiteExecMonitorTest::new);
         register("bot_kite_execmon_lat", BotKiteExecLatencyTest::new);
+        register("bot_coldstart_dist", BotColdStartDistTest::new);
         register("bot_window_variance", BotWindowVarianceTest::new);
         register("bot_warden_live_speed", BotWardenLiveSpeedTest::new);
         register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);

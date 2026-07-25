@@ -134,13 +134,12 @@ public class BotRangedCombat {
         }
 
         // Signal B: watch whether the distance is actually being held/opened.
-        double trend = bot.perception().speeds.gapTrend(t);
-        if (trend < KITE_FAIL_TREND) {
-            closingTicks++;
-        } else {
-            closingTicks = 0;
-        }
-        kiteFailing = closingTicks >= KITE_FAIL_TICKS;
+        // Signal B is no longer computed here: this method only runs in the ranged branch, and a
+        // monitor that only exists in one branch is not a safety net (bot_kite_execmon). It is now
+        // evaluated once per tick in AICompanionBot above every branch; this mirror keeps the
+        // existing kiteFailing() callers working.
+        closingTicks = bot.kiteMonitor().closingTicks(t);
+        kiteFailing = bot.kiteMonitor().failing(t);
 
         bot.setSprinting(false);
         bot.setJumping(false);

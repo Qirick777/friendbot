@@ -149,6 +149,7 @@ public final class BotTestManager {
         bot.mover().stop();
         bot.meleeCombat().stop();
         bot.rangedCombat().stop();
+        bot.kiteMonitor().reset();
         bot.survival().reset();
         bot.getInventory().clearContent();
         bot.stopRiding();

@@ -37,7 +37,7 @@ public class BotKiteExecLatencyTest implements BotTest {
 
     private static final int START_GAP = 16;
     private static final double CLOSE_RATE = 0.35;   // > the bot's sprint 0.2806 → the gap must shrink
-    private static final int SETTLE = 20;            // engage + let the controller take over
+    private static final int SETTLE = 60;            // engage + let the band settle before measuring
     private static final int RUN_TICKS = 200;
     private static final int EXEC_MAX_TICKS = 20;    // 10 (B's definition) + 10 (allowance)
 
@@ -130,12 +130,17 @@ public class BotKiteExecLatencyTest implements BotTest {
             if (closingStartTick < 0) {
                 closingStartTick = t;
                 gapAtClosingStart = gap;
+                // Zero the monitor at the start of the measured stretch: during the settle phase the
+                // BOT walks in to its rule-3 band, which is also a shrinking gap, and that latched B
+                // at ticksToExec:0 on the previous run. The latency being measured is B's response
+                // to the PURSUER closing, so the counter starts here.
+                bot.kiteMonitor().reset();
                 LOGGER.info("[EXECLAT] closing starts t={} gap={}", t, String.format("%.2f", gap));
             }
             double trend = bot.perception().speeds.gapTrend(pursuer);
             sumTrend += trend;
             trendTicks++;
-            if (!fired && bot.rangedCombat().kiteFailing()) {
+            if (!fired && bot.kiteMonitor().failing(pursuer)) {
                 fired = true;
                 execTick = t;
                 gapAtExec = gap;

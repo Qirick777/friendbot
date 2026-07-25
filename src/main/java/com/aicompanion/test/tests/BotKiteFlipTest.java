@@ -173,7 +173,7 @@ public class BotKiteFlipTest implements BotTest {
         // fast "is the kiting actually working" check, and it is what makes A's latency tolerable.
         if (!execMonitorFired && t > GLUE_TICKS) {
             bot.rangedCombat().setTarget(chaser);   // engage so the monitor runs
-            if (bot.rangedCombat().kiteFailing()) {
+            if (bot.kiteMonitor().failing(chaser)) {
                 execMonitorFired = true;
                 execMonitorTick = t;
                 LOGGER.info("[KITEFLIP] execution monitor fired at t={} (+{} ticks) gap={}",
