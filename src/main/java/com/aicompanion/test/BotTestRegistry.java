@@ -121,6 +121,9 @@ public final class BotTestRegistry {
         register("bot_kite_execmon", BotKiteExecMonitorTest::new);
         register("bot_kite_execmon_lat", BotKiteExecLatencyTest::new);
         register("bot_coldstart_dist", BotColdStartDistTest::new);
+        register("bot_coldstart_tail1", BotColdStartDistTest.Tail1::new);
+        register("bot_coldstart_tail2", BotColdStartDistTest.Tail2::new);
+        register("bot_coldstart_tail3", BotColdStartDistTest.Tail3::new);
         register("bot_kite_approach", BotKiteApproachTest::new);
         register("bot_window_variance", BotWindowVarianceTest::new);
         register("bot_warden_live_speed", BotWardenLiveSpeedTest::new);

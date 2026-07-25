@@ -44,6 +44,7 @@ import java.util.Random;
  */
 public class BotColdStartDistTest implements BotTest {
 
+
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final int ENGAGEMENTS = 30;
@@ -58,7 +59,24 @@ public class BotColdStartDistTest implements BotTest {
     }
 
     private final List<Draw> draws = new ArrayList<>();
-    private final Random rng = new Random(20260725L);   // fixed seed: the run is reproducible
+    /**
+     * Seed. The fixed-seed instance is a REGRESSION set: re-running it draws the same 30 geometries,
+     * which is what made it a clean before/after contamination test (sd 0.0228 -> 0.0205 across the
+     * contract boundary) — but it is NOT new tail information. Re-running it will report 0/30 over
+     * the decision line forever because it is the same 30 geometries every time. Estimating how
+     * often a warden actually crosses the line needs fresh geometry, which is what the tail variants
+     * supply.
+     */
+    protected long seed() {
+        return 20260725L;
+    }
+
+    /** "regression" (fixed geometry, before/after comparison) or "tail" (fresh geometry). */
+    protected String purpose() {
+        return "regression";
+    }
+
+    private final Random rng = new Random(seed());
 
     private Warden warden;
     private int engagement = -1;
@@ -70,6 +88,11 @@ public class BotColdStartDistTest implements BotTest {
     private Vec3 pathFrom;
     private Vec3 lastPos;
     private double pathSum;
+
+    @Override
+    public int[] arenaBounds() {
+        return new int[]{-52, 52, -52, 52};
+    }
 
     @Override
     public String name() {
@@ -113,6 +136,7 @@ public class BotColdStartDistTest implements BotTest {
         bot.rangedCombat().stop();
         draws.clear();
         engagement = -1;
+        LOGGER.info("[COLDSTART] seed={} purpose={} engagements={}", seed(), purpose(), ENGAGEMENTS);
     }
 
     private void startEngagement(BotTestContext ctx, int t) {
@@ -323,12 +347,64 @@ public class BotColdStartDistTest implements BotTest {
                 "n:%d,mean:%.4f(%.1f%%),sdBetweenRuns:%.4f,min:%.4f(%.1f%%),max:%.4f(%.1f%%),"
                         + "enterLine:%.4f,distMeanToLine:%.4f,3sd:%.4f,stable:%b,"
                         + "canKiteTrue:%d/%d,aboveEnterLine:%d,rSpawnDist:%.2f,rPathRatio:%.2f,"
-                        + "mobs:%d~%d,rMobs:%.2f,rTrialOrder:%.2f",
+                        + "mobs:%d~%d,rMobs:%.2f,rTrialOrder:%.2f,seed:%d,purpose:%s",
                 n, mean, 100.0 * mean / sprint, sd, min, 100.0 * min / sprint, max,
                 100.0 * max / sprint, enter, distToLine, 3 * sd, stable, kiteTrue, n, aboveEnter,
-                rDist, rRatio, minMobs, maxMobs, rMobs, rOrder);
+                rDist, rRatio, minMobs, maxMobs, rMobs, rOrder, seed(), purpose());
         String expected = "distribution of the ONE observation each engagement's cold-start verdict "
                 + "is taken from; stable iff |mean - decision line| >= 3sd(between engagements)";
         return stable ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
+    }
+
+    /** Fresh geometry for tail estimation. Same procedure, different draws. */
+    public static class Tail1 extends BotColdStartDistTest {
+        @Override
+        protected long seed() {
+            return 11L;
+        }
+
+        @Override
+        protected String purpose() {
+            return "tail";
+        }
+
+        @Override
+        public String name() {
+            return "bot_coldstart_tail1";
+        }
+    }
+
+    public static class Tail2 extends BotColdStartDistTest {
+        @Override
+        protected long seed() {
+            return 22L;
+        }
+
+        @Override
+        protected String purpose() {
+            return "tail";
+        }
+
+        @Override
+        public String name() {
+            return "bot_coldstart_tail2";
+        }
+    }
+
+    public static class Tail3 extends BotColdStartDistTest {
+        @Override
+        protected long seed() {
+            return 33L;
+        }
+
+        @Override
+        protected String purpose() {
+            return "tail";
+        }
+
+        @Override
+        public String name() {
+            return "bot_coldstart_tail3";
+        }
     }
 }

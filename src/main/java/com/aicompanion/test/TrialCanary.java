@@ -6,8 +6,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -16,99 +18,77 @@ import java.util.List;
 /**
  * TRIAL ISOLATION CONTRACT.
  *
- * <p>Two state leaks were found one entity at a time: the bot (fixed by {@code resetBot}) and the
- * second fake player (fixed by {@code resetUser}). Both were found only because a harness happened
- * to fail in a legible way — {@code bot_path_reach} failing twice at the identical coordinate,
- * {@code bot_escape_ride} reporting {@code userMoved:0.00} twice. The queue of remaining candidates
- * is obvious: leftover mobs, blocks a harness placed (creeper walls, MLG water), dropped items,
- * arrows in flight, the bot's inventory and off-hand, world time, injected layer-2 profiles. Patching
- * them one at a time as each is discovered guarantees the next one is discovered the same way.
+ * <p>Two state leaks were found one entity at a time: the bot ({@code resetBot}) and the second fake
+ * player ({@code resetUser}). Both surfaced only because a harness happened to fail legibly —
+ * {@code bot_path_reach} failing twice at the identical coordinate, {@code bot_escape_ride}
+ * reporting {@code userMoved:0.00} twice. Patching the next candidate as each is discovered
+ * guarantees the one after it is discovered the same way, so the leak is closed as a CLASS: every
+ * repeat trial must begin from the same state as the first, checked with values.</p>
  *
- * <p>So the leak is closed as a CLASS instead: every repeat trial must begin from the same state as
- * the first one, and that is checked with values rather than assumed. The baseline is captured right
- * after trial 1's {@code setup()} — the intended starting state — and every later trial is compared
- * against it after its own reset and setup. A mismatch fails that trial immediately and prints the
- * diff, so a leak surfaces as "the canary says 3 mobs survived", not as a mysterious FAIL three
- * harnesses later.</p>
+ * <p>Three nested regions, each with a different job — the split is measured, not stylistic:</p>
+ * <ul>
+ *   <li><b>Judged</b> = {@code arenaBounds} ∩ ±{@link #JUDGE_R}, shrunk 1 inward. A mismatch here
+ *       fails the trial. It must never exceed what the harness actually builds: with a fixed ±8,
+ *       {@code protect_priority} (builds dx −6..+10) and {@code creeper_wall} (dx −6..+8, dz ±4)
+ *       were being asked to guarantee ground they never touched, and water intruding there failed
+ *       them (9 and 14 core blocks, moving each trial).</li>
+ *   <li><b>Restored</b> = the harness's declared {@code arenaBounds}. Wider than judged so real
+ *       leftovers are still cleaned — {@code bot_catch_fall}'s water sat at dx −24 and restoring it
+ *       took that harness from 1/3 to 3/3. Changes here are logged, not fatal, because fluid flows
+ *       back in from surrounding terrain every trial (scheduled ticks, so {@code randomTickSpeed=0}
+ *       does not stop them): measured 149→119 blocks at protect_priority, 67~117 at kite_flip.</li>
+ *   <li><b>Beyond</b> = a {@link #GUARD_MARGIN} shell outside the declaration. Logged only. Its job
+ *       is to catch an under-declared box the same way values caught the under-sized ±24 default,
+ *       instead of trusting that someone read the harness source correctly.</li>
+ * </ul>
  */
 public final class TrialCanary {
 
-    /** Entity scan radius. The manager sweeps the same radius, so the two can never disagree. */
-    public static final double ENTITY_RADIUS = 64.0;
-    /** Block signature region (stride 1). Covers the area harnesses actually build/modify. */
-    private static final int BLOCK_R = 24;
-    /**
-     * Region the canary JUDGES on. Restore stays wide (BLOCK_R) so real leftovers are still cleaned
-     * — bot_catch_fall's water sat at dx -24 — but only the core may fail a trial. Measured reason:
-     * every surviving mismatch was outside +/-8 with a COUNT THAT VARIED run to run
-     * (kite_flip 67~117 at (-15,+1,+21), protect_priority 294/253, creeper_wall 303/296,
-     * path_reach 97/78). That is water flowing back into the carved arena from surrounding terrain;
-     * fluid ticks are scheduled, not random, so randomTickSpeed=0 does not stop them and restore
-     * only puts blocks back for the water to flow again. Harness-built arenas all cover +/-8, so the
-     * core is the part the manager can actually guarantee.
-     */
+    /** Judged core half-extent, before intersecting with the harness's own declared box. */
     private static final int JUDGE_R = 8;
-    /**
-     * Floor level and up. Harnesses build floors at y-1 and everything else above it; y-2 and below
-     * is untouched natural terrain that REACTS to the construction (measured: 544 sub-floor blocks
-     * changed id 304->300 after trial 1's platform went down, identically every trial). That is the
-     * world settling, not harness state, and including it made the canary cry wolf.
-     */
+    /** How far outside the declaration the guard shell looks (logged, never judged). */
+    private static final int GUARD_MARGIN = 12;
     private static final int BLOCK_Y_LO = -1;
     private static final int BLOCK_Y_HI = 3;
+    private static final int Y_SPAN = BLOCK_Y_HI - BLOCK_Y_LO + 1;
 
     public record Snapshot(int mobs, int items, int projectiles, int otherEntities, int players,
-                           long blockHash, int nonAirBlocks, long dayTime,
-                           String botState, String userState, int[] blockIds,
-                           String entityBreakdown) {
-    }
-
-    /**
-     * Remove item entities produced by arena construction. Placing a platform over natural terrain
-     * breaks grass/flowers and drops them on the first trial only, which the canary would otherwise
-     * report forever as "items 3 -> 0".
-     */
-    public static void sweepConstructionDebris(ServerLevel level, BlockPos origin) {
-        AABB box = new AABB(origin).inflate(ENTITY_RADIUS);
-        for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
-            e.discard();
-        }
-    }
-
-    /**
-     * Restore the arena to the baseline block-for-block. Detection alone would leave the operator to
-     * clean up per harness, which is the entity-at-a-time treadmill this class exists to end: a
-     * harness that leaves water where it caught a falling user (measured: 21 blocks at y+1) is
-     * cleaned here generically, not by editing that harness.
-     */
-    public static void restore(ServerLevel level, BlockPos origin, Snapshot base) {
-        if (base == null || base.blockIds() == null) {
-            return;
-        }
-        int[] ids = base.blockIds();
-        int at = 0;
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        for (int dx = -BLOCK_R; dx <= BLOCK_R; dx++) {
-            for (int dz = -BLOCK_R; dz <= BLOCK_R; dz++) {
-                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++) {
-                    if (at >= ids.length) {
-                        return;
-                    }
-                    p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-                    var want = net.minecraft.world.level.block.Block.stateById(ids[at++]);
-                    if (!level.getBlockState(p).equals(want)) {
-                        level.setBlock(p, want, 2);
-                    }
-                }
-            }
-        }
+                           int nonAirBlocks, long dayTime, String botState, String userState,
+                           int[] blockIds, int[] guardIds, int[] bounds, long scanNanos) {
     }
 
     private TrialCanary() {
     }
 
-    public static Snapshot capture(ServerLevel level, BlockPos origin, AICompanionBot bot) {
-        AABB box = new AABB(origin).inflate(ENTITY_RADIUS);
+    /** Entity sweep radius for a harness: always covers its own declared box. */
+    public static double sweepRadius(int[] b) {
+        int max = Math.max(Math.max(Math.abs(b[0]), Math.abs(b[1])),
+                Math.max(Math.abs(b[2]), Math.abs(b[3])));
+        return Math.max(64.0, max + GUARD_MARGIN + 4.0);
+    }
+
+    /**
+     * Remove entities that arena construction and arena RESTORE produce, neither of which is harness
+     * state. Item drops come from breaking natural blocks on the first trial only. Falling blocks are
+     * worse and were self-inflicted: restore rewrites baseline blocks, and a gravity block restored
+     * without support becomes a {@link FallingBlockEntity} — measured as
+     * {@code entities[creeper=1,player=2] -> [creeper=1,falling_block=2,player=2]} in
+     * {@code bot_creeper_wall}. The repair mechanism was manufacturing the leak it exists to remove.
+     */
+    public static void sweepConstructionDebris(ServerLevel level, BlockPos origin, int[] bounds) {
+        AABB box = new AABB(origin).inflate(sweepRadius(bounds));
+        for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
+            e.discard();
+        }
+        for (FallingBlockEntity e : level.getEntitiesOfClass(FallingBlockEntity.class, box)) {
+            e.discard();
+        }
+    }
+
+    public static Snapshot capture(ServerLevel level, BlockPos origin, AICompanionBot bot,
+                                   int[] bounds) {
+        long t0 = System.nanoTime();
+        AABB box = new AABB(origin).inflate(sweepRadius(bounds));
         int mobs = 0;
         int items = 0;
         int projectiles = 0;
@@ -133,26 +113,10 @@ public final class TrialCanary {
             }
         }
 
-        long hash = 1125899906842597L;
-        int nonAir = 0;
-        int span = 2 * BLOCK_R + 1;
-        int[] ids = new int[span * span * (BLOCK_Y_HI - BLOCK_Y_LO + 1)];
-        int at = 0;
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        for (int dx = -BLOCK_R; dx <= BLOCK_R; dx++) {
-            for (int dz = -BLOCK_R; dz <= BLOCK_R; dz++) {
-                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++) {
-                    p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-                    var state = level.getBlockState(p);
-                    int id = net.minecraft.world.level.block.Block.getId(state);
-                    ids[at++] = id;
-                    hash = hash * 31 + id;
-                    if (!state.isAir()) {
-                        nonAir++;
-                    }
-                }
-            }
-        }
+        int[] ids = new int[size(bounds)];
+        int nonAir = scan(level, origin, bounds, ids);
+        int[] guard = new int[size(expand(bounds))];
+        scan(level, origin, expand(bounds), guard);
 
         String botState = "none";
         if (bot != null) {
@@ -174,11 +138,68 @@ public final class TrialCanary {
             }
             bd.append(en.getKey()).append('=').append(en.getValue());
         }
-        return new Snapshot(mobs, items, projectiles, other, players, hash, nonAir,
-                level.getDayTime(), botState, userState, ids, bd.toString());
+        return new Snapshot(mobs, items, projectiles, other, players, nonAir, level.getDayTime(),
+                botState, userState + "|types:" + bd, ids, guard, bounds.clone(),
+                System.nanoTime() - t0);
     }
 
-    /** Fatal diff: entity/bot/user state anywhere in range, plus blocks in the JUDGED core only. */
+    private static int[] expand(int[] b) {
+        return new int[]{b[0] - GUARD_MARGIN, b[1] + GUARD_MARGIN,
+                b[2] - GUARD_MARGIN, b[3] + GUARD_MARGIN};
+    }
+
+    private static int size(int[] b) {
+        return (b[1] - b[0] + 1) * (b[3] - b[2] + 1) * Y_SPAN;
+    }
+
+    private static int scan(ServerLevel level, BlockPos origin, int[] b, int[] out) {
+        int at = 0;
+        int nonAir = 0;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dx = b[0]; dx <= b[1]; dx++) {
+            for (int dz = b[2]; dz <= b[3]; dz++) {
+                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++) {
+                    p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+                    var state = level.getBlockState(p);
+                    out[at++] = Block.getId(state);
+                    if (!state.isAir()) {
+                        nonAir++;
+                    }
+                }
+            }
+        }
+        return nonAir;
+    }
+
+    /**
+     * Restore the declared arena block-for-block. Flags deliberately omit neighbour updates: the
+     * default path let restored gravity blocks convert into falling-block entities.
+     */
+    public static void restore(ServerLevel level, BlockPos origin, Snapshot base) {
+        if (base == null || base.blockIds() == null) {
+            return;
+        }
+        int[] b = base.bounds();
+        int[] ids = base.blockIds();
+        int at = 0;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dx = b[0]; dx <= b[1]; dx++) {
+            for (int dz = b[2]; dz <= b[3]; dz++) {
+                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++) {
+                    if (at >= ids.length) {
+                        return;
+                    }
+                    p.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+                    var want = Block.stateById(ids[at++]);
+                    if (!level.getBlockState(p).equals(want)) {
+                        level.setBlock(p, want, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                    }
+                }
+            }
+        }
+    }
+
+    /** Fatal diff: entity/bot/user state, plus blocks in the judged core only. */
     public static String diff(Snapshot base, Snapshot now) {
         List<String> d = new ArrayList<>();
         if (base.mobs() != now.mobs()) {
@@ -196,10 +217,6 @@ public final class TrialCanary {
         if (base.players() != now.players()) {
             d.add("players " + base.players() + "->" + now.players());
         }
-        if (!base.entityBreakdown().equals(now.entityBreakdown())) {
-            // Naming the type is what turns "otherEntities 0->1" into something actionable.
-            d.add("entities[" + base.entityBreakdown() + "] -> [" + now.entityBreakdown() + "]");
-        }
         if (base.dayTime() != now.dayTime()) {
             d.add("dayTime " + base.dayTime() + "->" + now.dayTime());
         }
@@ -207,54 +224,88 @@ public final class TrialCanary {
             d.add("bot[" + base.botState() + "] -> [" + now.botState() + "]");
         }
         if (!base.userState().equals(now.userState())) {
-            d.add("user[" + base.userState() + "] -> [" + now.userState() + "]");
+            d.add("user/types[" + base.userState() + "] -> [" + now.userState() + "]");
         }
-        String core = blockDiff(base, now, true);
+        String core = blockDiff(base, now, Region.JUDGED);
         if (!core.isEmpty()) {
             d.add(core);
         }
         return String.join("; ", d);
     }
 
-    /**
-     * Non-fatal diff for the restore-but-do-not-judge ring. Narrowing the judged region without
-     * reporting this would mean leaks there get silently cleaned and never seen — and catch_fall's
-     * water lived exactly there.
-     */
+    /** Ring 1: inside the declared arena, outside the judged core. Restored, logged, not fatal. */
     public static String outerDiff(Snapshot base, Snapshot now) {
-        return blockDiff(base, now, false);
+        return blockDiff(base, now, Region.RING);
     }
 
-    private static String blockDiff(Snapshot base, Snapshot now, boolean core) {
-        int[] a = base.blockIds();
-        int[] b = now.blockIds();
-        if (a == null || b == null) {
+    /** Ring 2: outside the declaration entirely. Logged only — the guard on the declaration itself. */
+    public static String guardDiff(Snapshot base, Snapshot now) {
+        int[] a = base.guardIds();
+        int[] b = now.guardIds();
+        if (a == null || b == null || a.length != b.length) {
             return "";
         }
-        int span = 2 * BLOCK_R + 1;
-        int yspan = BLOCK_Y_HI - BLOCK_Y_LO + 1;
+        int[] eb = expand(base.bounds());
+        int[] inner = base.bounds();
         int changed = 0;
         String first = "?";
-        for (int i = 0; i < Math.min(a.length, b.length); i++) {
-            if (a[i] == b[i]) {
-                continue;
+        int at = 0;
+        for (int dx = eb[0]; dx <= eb[1]; dx++) {
+            for (int dz = eb[2]; dz <= eb[3]; dz++) {
+                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++, at++) {
+                    boolean insideDeclared = dx >= inner[0] && dx <= inner[1]
+                            && dz >= inner[2] && dz <= inner[3];
+                    if (insideDeclared || a[at] == b[at]) {
+                        continue;
+                    }
+                    changed++;
+                    if (changed == 1) {
+                        first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
+                    }
+                }
             }
-            int dx = i / (span * yspan) - BLOCK_R;
-            int rem = i % (span * yspan);
-            int dz = rem / yspan - BLOCK_R;
-            int dy = rem % yspan + BLOCK_Y_LO;
-            boolean inCore = Math.abs(dx) <= JUDGE_R && Math.abs(dz) <= JUDGE_R;
-            if (inCore != core) {
-                continue;
-            }
-            changed++;
-            if (changed == 1) {
-                first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[i], b[i]);
+        }
+        return changed == 0 ? ""
+                : "beyondDeclared changed:" + changed + " first" + first
+                        + " (declaration may be too small)";
+    }
+
+    private enum Region { JUDGED, RING }
+
+    private static String blockDiff(Snapshot base, Snapshot now, Region region) {
+        int[] a = base.blockIds();
+        int[] b = now.blockIds();
+        if (a == null || b == null || a.length != b.length) {
+            return "";
+        }
+        int[] bd = base.bounds();
+        // Judged core: the declared box intersected with +/-JUDGE_R, then shrunk one block inward.
+        // The outermost ring of a harness's own floor is exactly where neighbouring fluid arrives.
+        int jx0 = Math.max(bd[0], -JUDGE_R) + 1;
+        int jx1 = Math.min(bd[1], JUDGE_R) - 1;
+        int jz0 = Math.max(bd[2], -JUDGE_R) + 1;
+        int jz1 = Math.min(bd[3], JUDGE_R) - 1;
+        int changed = 0;
+        String first = "?";
+        int at = 0;
+        for (int dx = bd[0]; dx <= bd[1]; dx++) {
+            for (int dz = bd[2]; dz <= bd[3]; dz++) {
+                for (int dy = BLOCK_Y_LO; dy <= BLOCK_Y_HI; dy++, at++) {
+                    boolean judged = dx >= jx0 && dx <= jx1 && dz >= jz0 && dz <= jz1;
+                    if (judged != (region == Region.JUDGED) || a[at] == b[at]) {
+                        continue;
+                    }
+                    changed++;
+                    if (changed == 1) {
+                        first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
+                    }
+                }
             }
         }
         if (changed == 0) {
             return "";
         }
-        return (core ? "coreBlocks changed:" : "outerBlocks changed:") + changed + " first" + first;
+        return (region == Region.JUDGED ? "coreBlocks changed:" : "outerBlocks changed:")
+                + changed + " first" + first;
     }
 }

@@ -70,6 +70,11 @@ public class BotKiteExecMonitorTest implements BotTest {
     private int failingTicksTotal;    // failing ticks in TOTAL (not necessarily consecutive)
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-94, 24, -16, 16};
+    }
+
+    @Override
     public String name() {
         return "bot_kite_execmon";
     }

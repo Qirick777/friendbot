@@ -55,6 +55,11 @@ public class BotRule1FastTest implements BotTest {
     private double attrSeen;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-12, 152, -12, 12};
+    }
+
+    @Override
     public String name() {
         return "bot_rule1_fast";
     }

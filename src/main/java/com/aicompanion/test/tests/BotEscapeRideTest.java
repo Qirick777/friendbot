@@ -41,6 +41,11 @@ public class BotEscapeRideTest implements BotTest {
     }
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-44, 12, -14, 14};
+    }
+
+    @Override
     public String name() {
         return "bot_escape_ride";
     }

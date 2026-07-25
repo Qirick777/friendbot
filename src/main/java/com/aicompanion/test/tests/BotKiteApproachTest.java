@@ -44,6 +44,11 @@ public class BotKiteApproachTest implements BotTest {
     private int intentOpenTicks;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-12, 28, -14, 14};
+    }
+
+    @Override
     public String name() {
         return "bot_kite_approach";
     }

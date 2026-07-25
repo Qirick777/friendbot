@@ -56,6 +56,11 @@ public class BotKiteFlipTest implements BotTest {
     private int execMonitorTick = -1;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-94, 24, -14, 14};
+    }
+
+    @Override
     public String name() {
         return "bot_kite_flip";
     }

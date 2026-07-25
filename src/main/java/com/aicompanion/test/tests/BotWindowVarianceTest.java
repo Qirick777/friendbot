@@ -56,6 +56,11 @@ public class BotWindowVarianceTest implements BotTest {
     private int maxMobsDuringPhase;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-14, 114, -12, 12};
+    }
+
+    @Override
     public String name() {
         return "bot_window_variance";
     }

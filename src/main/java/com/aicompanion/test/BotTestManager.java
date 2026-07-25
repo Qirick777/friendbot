@@ -152,7 +152,8 @@ public final class BotTestManager {
                 if (baseline == null) {
                     // Trial 1 must start from the same swept arena as trials 2..n, or the baseline
                     // records world-gen leftovers that no later trial can reproduce.
-                    ctx.env.clearEntities(ctx.origin, TrialCanary.ENTITY_RADIUS);
+                    ctx.env.clearEntities(ctx.origin,
+                            TrialCanary.sweepRadius(active.arenaBounds()));
                 }
                 active.setup(ctx);
                 setupDone = true;
@@ -162,20 +163,32 @@ public final class BotTestManager {
                 // Building an arena over natural terrain drops item entities on the first trial and
                 // over flat stone on none of the others. That debris is a by-product of construction,
                 // not harness state, so it is swept before the snapshot on every trial alike.
-                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin);
+                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin, active.arenaBounds());
                 TrialCanary.Snapshot now = TrialCanary.capture(
-                        ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current());
+                        ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current(),
+                        active.arenaBounds());
                 if (baseline == null) {
                     baseline = now;
                     canaryDiff = "";
-                    LOGGER.info("[BOTTEST] canary baseline mobs={} items={} proj={} blocks={} bot=[{}] user=[{}]",
-                            now.mobs(), now.items(), now.projectiles(), now.nonAirBlocks(),
-                            now.botState(), now.userState());
+                    int[] ab = active.arenaBounds();
+                    LOGGER.info("[BOTTEST] canary baseline arena=x{}..{} z{}..{} scan={} blocks in "
+                                    + "{}ms | mobs={} items={} proj={} nonAir={} bot=[{}] user=[{}]",
+                            ab[0], ab[1], ab[2], ab[3], now.blockIds().length,
+                            String.format("%.1f", now.scanNanos() / 1.0E6), now.mobs(), now.items(),
+                            now.projectiles(), now.nonAirBlocks(), now.botState(), now.userState());
                 } else {
                     String outer = TrialCanary.outerDiff(baseline, now);
                     if (!outer.isEmpty()) {
-                        // Restored but not judged: reported so the ring never goes dark.
-                        LOGGER.info("[BOTTEST] canary outer-ring (restored, not judged): {}", outer);
+                        // Ring 1 — restored but not judged. Reported so the ring never goes dark:
+                        // this is the signal that was masking protect_priority's core hits.
+                        LOGGER.info("[BOTTEST] canary ring1 (in arena, restored, not judged): {}",
+                                outer);
+                    }
+                    String guard = TrialCanary.guardDiff(baseline, now);
+                    if (!guard.isEmpty()) {
+                        // Ring 2 — outside the declaration. The declaration is checked with values,
+                        // not trusted because someone read the harness source.
+                        LOGGER.warn("[BOTTEST] canary ring2 {}", guard);
                     }
                     canaryDiff = TrialCanary.diff(baseline, now);
                     if (!canaryDiff.isEmpty()) {
@@ -292,7 +305,7 @@ public final class BotTestManager {
                 // (path, movement target, combat target, mount, inventory, health) leaks into the
                 // next trial. bot_path_reach exposed this: trial 1 passed and trials 2-3 failed at
                 // the identical stuck coordinate.
-                ctx.env.clearEntities(ctx.origin, TrialCanary.ENTITY_RADIUS);
+                ctx.env.clearEntities(ctx.origin, TrialCanary.sweepRadius(active.arenaBounds()));
                 resetBot();
                 resetUser();
                 TrialCanary.restore(ctx.level, ctx.origin, baseline);

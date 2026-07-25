@@ -57,6 +57,11 @@ public class BotKiteRecoverTest implements BotTest {
     private boolean harnessAssistedEscape;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-94, 24, -14, 14};
+    }
+
+    @Override
     public String name() {
         return "bot_kite_recover";
     }

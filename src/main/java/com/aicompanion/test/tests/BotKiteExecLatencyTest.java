@@ -53,6 +53,11 @@ public class BotKiteExecLatencyTest implements BotTest {
     private int trendTicks;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-44, 30, -14, 14};
+    }
+
+    @Override
     public String name() {
         return "bot_kite_execmon_lat";
     }

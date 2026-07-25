@@ -27,6 +27,25 @@ public interface BotTest {
      * 1 = deterministic single-shot. Override for anything whose outcome depends on mob AI,
      * firing timing or pathfinding success, so a lucky single run cannot be mistaken for a PASS.
      */
+    /**
+     * Axis-aligned footprint this harness writes to, as {minDx, maxDx, minDz, maxDz} relative to the
+     * origin. The isolation contract scans, restores and sweeps over exactly this box, so a harness
+     * that builds a 110-block corridor must say so — otherwise the part outside the default is
+     * neither verified nor restored, which is the hole the +/-24 default was hiding (measured: seven
+     * harnesses exceeded it, worst -90).
+     *
+     * <p>Declared per axis, NOT as one radius: a corridor is -90..+20 by +/-10, and scanning that as
+     * a symmetric +/-90 cube would cost 17x for nothing. Asymmetric, the same corridor is CHEAPER
+     * than the old default.</p>
+     *
+     * <p>The declaration is checked with values, not trusted: the canary also scans a margin beyond
+     * it and logs anything that changed there, so an under-declared box shows up the same way the
+     * under-sized default did.</p>
+     */
+    default int[] arenaBounds() {
+        return new int[]{-24, 24, -24, 24};
+    }
+
     default int repeats() {
         return 1;
     }

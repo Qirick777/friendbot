@@ -52,6 +52,11 @@ public class BotWardenLiveSpeedTest implements BotTest {
     private Vec3 lastWardenPos;
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-12, 42, -12, 12};
+    }
+
+    @Override
     public String name() {
         return "bot_warden_live_speed";
     }

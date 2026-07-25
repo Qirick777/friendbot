@@ -56,6 +56,11 @@ public class BotDodgeTest implements BotTest {
     }
 
     @Override
+    public int[] arenaBounds() {
+        return new int[]{-10, 22, -20, 20};
+    }
+
+    @Override
     public String name() {
         return "bot_dodge";
     }
