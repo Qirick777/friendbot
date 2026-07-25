@@ -66,9 +66,18 @@ public class BotWardenPursuitTest implements BotTest {
         return "bot_warden_pursuit";
     }
 
+    /**
+     * 30, matching {@code bot_coldstart_dist}'s engagement count exactly. The question this harness
+     * feeds is "is the fleeing-target rate within 1~2x sd(0.0205) of the stationary rate, and is any
+     * difference reproducible" — reproducibility cannot be judged from one engagement, and the
+     * comparison target is a 30-engagement distribution, so this must produce its own
+     * between-engagement sd over the same n. The per-trial premise (>=60 sampled ticks) only makes a
+     * single trial's mean trustworthy; that is one independent window at W60 and says nothing at all
+     * about spread.
+     */
     @Override
     public int repeats() {
-        return 5;
+        return 30;
     }
 
     @Override
