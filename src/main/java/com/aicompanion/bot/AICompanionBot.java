@@ -32,6 +32,9 @@ public class AICompanionBot extends ServerPlayer {
     /** Signal B (kiting execution monitor). Evaluated above EVERY branch — see KiteMonitor. */
     private final com.aicompanion.bot.combat.KiteMonitor kiteMonitor =
             new com.aicompanion.bot.combat.KiteMonitor();
+    /** T5.2 equipment manager — ch.14 「전투 로직과 분리된 상시 백그라운드」. */
+    private final com.aicompanion.bot.equip.BotEquipment equipment =
+            new com.aicompanion.bot.equip.BotEquipment();
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
@@ -64,6 +67,10 @@ public class AICompanionBot extends ServerPlayer {
     }
 
     /** Reflex layer (T4.2). */
+    public com.aicompanion.bot.equip.BotEquipment equipment() {
+        return equipment;
+    }
+
     public com.aicompanion.bot.combat.KiteMonitor kiteMonitor() {
         return kiteMonitor;
     }
@@ -120,6 +127,10 @@ public class AICompanionBot extends ServerPlayer {
         // consequence in bot_kite_execmon: a fast mob glued to the bot goes to the melee branch and
         // B was never evaluated at all while the bot lost 31.7 HP.
         kiteMonitor.tick(this);
+
+        // Equipment manager (T5.2 / ch.14): background, re-evaluates only on inventory change. Runs
+        // above the combat branches so a swap is in hand before any controller uses it this tick.
+        equipment.tick(this);
 
         // Environment reflex (T4.4): fall survival (R2) drops water/blocks under a fatal fall
         // (no movement ownership); creeper defense places a blast wall or shields+flees.

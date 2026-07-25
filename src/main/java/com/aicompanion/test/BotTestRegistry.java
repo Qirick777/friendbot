@@ -6,6 +6,7 @@ import com.aicompanion.test.tests.BotCatchNoneTest;
 import com.aicompanion.test.tests.BotCreeperLowFuseTest;
 import com.aicompanion.test.tests.BotColdStartDistTest;
 import com.aicompanion.test.tests.BotCreeperWallTest;
+import com.aicompanion.test.tests.BotEquipTest;
 import com.aicompanion.test.tests.BotEscapeFarThreatTest;
 import com.aicompanion.test.tests.BotEscapeNoneTest;
 import com.aicompanion.test.tests.BotEscapeRideTest;
@@ -129,6 +130,8 @@ public final class BotTestRegistry {
         register("bot_rule1_nokite", BotRule1ActionTest.NoKite::new);
         register("bot_rule1_kite", BotRule1ActionTest.Kite::new);
         register("bot_rule_dcell", BotRuleDCellTest::new);
+        // T5.2 장비 관리자.
+        register("bot_equip", BotEquipTest::new);
         register("bot_kite_flip", BotKiteFlipTest::new);
         register("bot_kite_band_latch", BotKiteBandLatchTest::new);
         register("bot_kite_recover", BotKiteRecoverTest::new);
