@@ -51,6 +51,16 @@ public class BotWardenPursuitTest implements BotTest {
 
     private Warden warden;
     private final List<Double> samples = new ArrayList<>();
+    /**
+     * THE draw — one per engagement, exactly as bot_coldstart_dist takes one. Both read the same
+     * field ({@code TargetInfo.observedSpeed} = SpeedObserver W60, displacement between window ends
+     * over elapsed ticks, stationary ticks included). But coldstart takes a SINGLE window and
+     * averaging many overlapping windows here would shrink the between-engagement spread by
+     * construction, so the two sd values would not be comparable even though the underlying
+     * estimator is identical. Same estimator, same sampling.
+     */
+    private double draw = -1;
+    private int movingTicks;
     private Vec3 botStart;
     private double botFled;
     private double trailingRate;
@@ -128,6 +138,8 @@ public class BotWardenPursuitTest implements BotTest {
         botStart = null;
         botFled = 0;
         trailingRate = 0;
+        draw = -1;
+        movingTicks = 0;
     }
 
     @Override
@@ -172,9 +184,17 @@ public class BotWardenPursuitTest implements BotTest {
         // Sample only while the bot is genuinely moving: a stalled bot would silently turn this back
         // into the stationary-target measurement the harness exists to distinguish itself from.
         if (bot.perception().botDisplacementPerTick > SpeedObserver.BOT_MOVING_MIN) {
+            movingTicks++;
             for (TargetInfo ti : bot.perception().targets) {
                 if (ti.entity == warden && ti.speedObserved) {
                     samples.add(ti.observedSpeed);
+                    if (draw < 0 && movingTicks >= SpeedObserver.MIN_SPAN_TICKS) {
+                        // First valid window taken entirely while the bot was in flight.
+                        draw = ti.observedSpeed;
+                        LOGGER.info("[PURSUIT] draw={} at t={} movingTicks={} botFled={}",
+                                String.format("%.4f", draw), t, movingTicks,
+                                String.format("%.2f", botFled));
+                    }
                     break;
                 }
             }
@@ -185,38 +205,27 @@ public class BotWardenPursuitTest implements BotTest {
     @Override
     public BotTestResult judge(BotTestContext ctx) {
         int n = samples.size();
-        double mean = 0;
-        double sd = 0;
-        double min = 0;
-        double max = 0;
-        if (n > 0) {
-            mean = samples.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-            min = samples.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-            max = samples.stream().mapToDouble(Double::doubleValue).max().orElse(0);
-            if (n > 1) {
-                final double m = mean;
-                double v = samples.stream().mapToDouble(d -> (d - m) * (d - m)).sum() / (n - 1);
-                sd = Math.sqrt(v);
-            }
-        }
-        // PREMISE only. Judging on "does it match the stationary value" would decide the redesign's
-        // question by choosing the threshold, which is the thing this measurement exists to avoid.
-        boolean fled = botFled > 10.0;
-        boolean enough = n >= 60;
-        boolean ok = fled && enough;
+        double runMean = n > 0 ? samples.stream().mapToDouble(Double::doubleValue).average().orElse(0) : 0;
 
-        LOGGER.info("[PURSUIT] n={} mean={} sd={} trailing={} botFled={} vsStationary={}",
-                n, String.format("%.4f", mean), String.format("%.4f", sd),
-                String.format("%.4f", trailingRate), String.format("%.2f", botFled),
-                String.format("%+.4f", mean - STATIONARY_REFERENCE));
+        // PREMISE: enough ticks IN MOTION for one valid window, NOT "the bot escaped far enough".
+        // Selecting on distance fled would select on how well the flight went, which correlates with
+        // the warden being slow or far — biasing the pursuit rate low and manufacturing exactly the
+        // "looks like the stationary value, so one distribution" conclusion this measurement exists
+        // to test. botFled is reported, never gated on.
+        boolean enoughMotion = movingTicks >= SpeedObserver.MIN_SPAN_TICKS;
+        boolean gotDraw = draw >= 0;
+        boolean ok = enoughMotion && gotDraw;
+
+        LOGGER.info("[PURSUIT] RESULT draw={} runMean={} movingTicks={} botFled={} samples={}",
+                String.format("%.4f", draw), String.format("%.4f", runMean), movingTicks,
+                String.format("%.2f", botFled), n);
         String measured = String.format(
-                "pursuitRate:%.4f(%.1f%%),sd:%.4f,min:%.4f,max:%.4f,samples:%d,indepTrailing:%.4f,"
-                        + "botFled:%.2f,stationaryRef:%.4f,delta:%+.4f,botSprint:%.4f",
-                mean, 100.0 * mean / CombatStats.BOT_SPRINT_SPEED, sd, min, max, n, trailingRate,
-                botFled, STATIONARY_REFERENCE, mean - STATIONARY_REFERENCE,
-                CombatStats.BOT_SPRINT_SPEED);
-        String expected = "premise: the bot actually fled (>10 blocks) and >=60 sampled ticks — the "
-                + "pursuit rate itself is reported for the redesign, not gated";
+                "draw:%.4f,runMean:%.4f,movingTicks:%d,botFled:%.2f,samples:%d,indepTrailing:%.4f,"
+                        + "stationaryRef:%.4f,delta:%+.4f,botSprint:%.4f",
+                draw, runMean, movingTicks, botFled, n, trailingRate, STATIONARY_REFERENCE,
+                draw >= 0 ? draw - STATIONARY_REFERENCE : Double.NaN, CombatStats.BOT_SPRINT_SPEED);
+        String expected = "premise: >=" + SpeedObserver.MIN_SPAN_TICKS + " ticks in motion and one "
+                + "valid in-flight window — the pursuit rate itself is reported, never gated";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 }
