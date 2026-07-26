@@ -87,6 +87,28 @@ public interface BotTest {
         return 1.0;
     }
 
+    /**
+     * O-1(3): an extra aggregate the harness accumulated ACROSS trials, appended to the aggregate
+     * verdict line. The trial verdict is binary, and a binary verdict throws away information when
+     * a trial contains several independent sub-events: bot_dodge judges 「4발 전부 빗나감」, so 50
+     * trials carry 200 arrow outcomes and the pass count reports only 50 of them. Default empty.
+     *
+     * <p>Diagnostic only — the manager appends this to {@code measured} and never reads it for
+     * PASS/FAIL. Whether a threshold applies per arrow or per trial is a spec question, not the
+     * harness's to settle.</p>
+     */
+    default String aggregateExtra() {
+        return "";
+    }
+
+    /**
+     * Clear whatever {@link #aggregateExtra} accumulates. Called once at START, before trial 1 —
+     * the manager builds a FRESH instance for every trial, so cross-trial accumulation has to live
+     * in static state and static state has to be reset explicitly.
+     */
+    default void resetAggregate() {
+    }
+
     /** Create the environment. Called once, on the server thread, before observation. */
     void setup(BotTestContext ctx);
 

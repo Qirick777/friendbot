@@ -60,6 +60,12 @@ public class BotWardenProbeTest implements BotTest {
         return "bot_warden_probe";
     }
 
+    /** O-5(2): 봇 자율 이동 활성 여부를 전제로 명시한다. */
+    @Override
+    public String scenarioSpec() {
+        return "워든 어트리뷰트/실측 속도 프로브. 유저 없음(TestUser.spawn 미호출) → Perception.java:131 level.players()가 봇 외 플레이어를 찾지 못해 perception().user==null → BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성이며 판정 라인의 idleCommandedTicks:0로 값 확인된다(O-5(2)).";
+    }
+
     @Override
     public int timeoutTicks() {
         return 900;

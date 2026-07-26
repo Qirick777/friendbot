@@ -108,6 +108,12 @@ public class BotWardenPursuitTest implements BotTest {
         return "bot_warden_pursuit";
     }
 
+    /** O-5(2): 봇 자율 이동 활성 여부를 전제로 명시한다. */
+    @Override
+    public String scenarioSpec() {
+        return "봇 최대체력 400 + 매 틱 만피 회복(생존 계층이 틱을 가로채지 못하게), 워든 setInvulnerable(true). 유저 없음(TestUser.spawn 미호출) → Perception.java:131 level.players()가 봇 외 플레이어를 찾지 못해 perception().user==null → BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성이며 판정 라인의 idleCommandedTicks:0로 값 확인된다(O-5(2)).";
+    }
+
     /**
      * 30, matching {@code bot_coldstart_dist}'s engagement count exactly. The question this harness
      * feeds is "is the fleeing-target rate within 1~2x sd(0.0205) of the stationary rate, and is any

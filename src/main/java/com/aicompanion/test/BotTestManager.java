@@ -135,7 +135,7 @@ public final class BotTestManager {
             // sweep move to its correct position (before setup) instead of running after it and
             // deleting entities the harness had just placed on purpose.
             lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS)
-                    .set(false, server);
+                    .set(TILE_DROPS, server);
         }
         LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
                 test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
@@ -144,8 +144,9 @@ public final class BotTestManager {
         // than buried in setup(). Empty means the harness has not stated any — which is itself the
         // finding, so it is logged as "(unstated)" instead of being silently skipped.
         String spec = test.scenarioSpec();
-        LOGGER.info("[BOTTEST] {} runId={} SCENARIO {}", test.name(), RUN_ID,
-                spec == null || spec.isBlank() ? "(unstated)" : spec);
+        LOGGER.info("[BOTTEST] {} runId={} SCENARIO doTileDrops={} | {}", test.name(), RUN_ID,
+                TILE_DROPS, spec == null || spec.isBlank() ? "(unstated)" : spec);
+        test.resetAggregate();
         return true;
     }
 
@@ -163,6 +164,17 @@ public final class BotTestManager {
      */
     public static final String RUN_ID =
             System.getProperty("bottest.runid", "NORUNID");
+
+    /**
+     * L-5 / O-2(3) single-variable arm. K-7 turned {@code doTileDrops} off as part of a change that
+     * ALSO moved the debris sweep before {@code setup()}; two variables moved at once, so the
+     * canary MISMATCH that appeared afterwards cannot be attributed to either. This property puts
+     * exactly one of them back so the pair can be compared: {@code -Dbottest.tiledrops=true}.
+     * Default false = the K-7 standard world. The chosen value is stamped into the SCENARIO line,
+     * so no verdict measured under the arm can be mistaken for a standard one.
+     */
+    public static final boolean TILE_DROPS =
+            Boolean.parseBoolean(System.getProperty("bottest.tiledrops", "false"));
 
     private static BotTestResult withMoveOwner(BotTestResult r) {
         com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
@@ -386,11 +398,16 @@ public final class BotTestManager {
                     : active.successThreshold() - (SCREENING_MODE ? SCREENING_SLACK : 0.0);
             boolean ok = deterministic ? trialsPassed == trialIndex
                     : lb >= effective - 1.0E-9;
+            // O-1(3): the sub-event aggregate rides alongside the trial aggregate. Both values are
+            // printed; only the trial one is judged, because which of the two the spec threshold
+            // refers to is not the harness's call.
+            String extra = active.aggregateExtra();
             String measured = String.format(
-                    "trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f,canary:%s|%s",
+                    "trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f,canary:%s%s|%s",
                     trialIndex, trialsPassed, rate, lb,
                     trialIndex <= 1 ? "n/a"
                             : canaryMismatches == 0 ? "OK" : ("MISMATCH x" + canaryMismatches),
+                    extra == null || extra.isBlank() ? "" : "," + extra,
                     String.join("|", trialLines));
             String expected = deterministic
                     ? String.format("all %d trials pass (deterministic requirement) — %s",

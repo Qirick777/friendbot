@@ -50,9 +50,61 @@ public class BotDodgeTest implements BotTest {
         return 50;
     }
 
+    /**
+     * NOT a design-document value. 설계서:1387/1389의 T4.2 [검증] (b)는 「스켈레톤이 봇에 화살 발사 →
+     * 봇이 사이드스텝해 회피(화살 명중 안 함, 봇 체력 불변)」이고 **판정: 화살 발사 후 봇 체력 불변**이다.
+     * 확률도, 비율도, 임계도 문장에 없다. 0.80은 이 하니스가 스스로 정한 수이고 :43의 주석이 그것을
+     * 「the spec threshold」라 부른 것은 오라벨(유형 #8)이다.
+     *
+     * <p>더 중요한 것은 이 수의 분모다. 설계 문장은 「화살 발사 후 체력 불변」— 화살 단위로도, 트라이얼
+     * 단위로도 읽힌다. 하니스는 트라이얼 단위(4발 전부 빗나감)로 재고 있다. 두 해석은 같은 봇에 대해
+     * 전혀 다른 수를 낸다. 여기서 고르지 않는다 — {@link #aggregateExtra()}가 두 값을 다 싣는다.</p>
+     */
     @Override
     public double successThreshold() {
         return 0.80;
+    }
+
+    @Override
+    public String scenarioSpec() {
+        return "봇 최대체력 20(바닐라값), setInvulnerable(false) — 실제로 맞아야 판정이 성립한다. "
+                + "오프핸드 비움 = 방패 없음 팔. 방패 있음 팔은 존재하지 않는다(bot_shield는 R1 방패 분기의 "
+                + "별개 하니스). 스켈레톤 1기, 봇 동쪽 7블록, 관측 240틱. 유저 없음 → 16장 자율 이동 미도달.";
+    }
+
+    // --- O-1(3) 화살 단위 집계. 매 트라이얼 새 인스턴스가 만들어지므로 static이어야 한다. ---
+    private static int cumArrows;
+    private static int cumHits;
+
+    @Override
+    public void resetAggregate() {
+        cumArrows = 0;
+        cumHits = 0;
+    }
+
+    @Override
+    public String aggregateExtra() {
+        if (cumArrows <= 0) {
+            return "";
+        }
+        int evaded = cumArrows - cumHits;
+        double p = (double) evaded / cumArrows;
+        return String.format("arrowsTotal:%d,arrowHitsTotal:%d,perArrowEvade:%.3f,perArrowWilson95Lower:%.3f",
+                cumArrows, cumHits, p, wilsonLower(evaded, cumArrows));
+    }
+
+    /** Same estimator the manager uses on trials, applied to the arrow-level sample. */
+    private static double wilsonLower(int k, int n) {
+        if (n <= 0) {
+            return 0.0;
+        }
+        double z = 1.959963985;
+        double z2 = z * z;
+        double p = (double) k / n;
+        double denom = 1.0 + z2 / n;
+        double centre = p + z2 / (2 * n);
+        double margin = z * Math.sqrt(p * (1 - p) / n + z2 / (4.0 * n * n));
+        return Math.max(0.0, (centre - margin) / denom);
     }
 
     @Override
@@ -161,6 +213,10 @@ public class BotDodgeTest implements BotTest {
         boolean sidestepped = maxLateral > 1.0;        // evasion actually moved the bot
 
         boolean ok = fired && unharmed && sidestepped;
+        // Feed the arrow-level sample. The trial verdict above is UNCHANGED — this only records
+        // the sub-events the binary verdict discards.
+        cumArrows += arrows;
+        cumHits += hitEvents;
         String measured = String.format(
                 "arrows:%d,hits:%d,evadeTicks:%d,hp:%.1f->%.1f(min),lateral:%.2f",
                 arrows, hitEvents, evadeTicks, startHp, minHp, maxLateral);

@@ -64,6 +64,12 @@ public class BotRule1FastTest implements BotTest {
         return "bot_rule1_fast";
     }
 
+    /** O-5(2): 봇 자율 이동 활성 여부를 전제로 명시한다. */
+    @Override
+    public String scenarioSpec() {
+        return "봇 최대체력 400 + 매 틱 만피 회복, 속도 부여 좀비 setInvulnerable(true). 규칙1 진입·해제선의 실측 입력을 만드는 전제. 유저 없음(TestUser.spawn 미호출) → Perception.java:131 level.players()가 봇 외 플레이어를 찾지 못해 perception().user==null → BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성이며 판정 라인의 idleCommandedTicks:0로 값 확인된다(O-5(2)).";
+    }
+
     @Override
     public int timeoutTicks() {
         return BOT_PHASE + WARMUP + WINDOW + 80;

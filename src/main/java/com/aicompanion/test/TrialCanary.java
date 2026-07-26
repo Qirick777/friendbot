@@ -264,6 +264,7 @@ public final class TrialCanary {
         int[] inner = base.bounds();
         int changed = 0;
         String first = "?";
+        List<String> detail = new ArrayList<>();
         int at = 0;
         for (int dx = eb[0]; dx <= eb[1]; dx++) {
             for (int dz = eb[2]; dz <= eb[3]; dz++) {
@@ -277,15 +278,38 @@ public final class TrialCanary {
                     if (changed == 1) {
                         first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
                     }
+                    if (detail.size() < DETAIL_CAP) {
+                        detail.add(String.format("(%+d,%+d,%+d) %s => %s",
+                                dx, dy, dz, desc(a[at]), desc(b[at])));
+                    }
                 }
             }
         }
         return changed == 0 ? ""
                 : "beyondDeclared changed:" + changed + " first" + first
+                        + " states{" + String.join(" ; ", detail) + "}"
                         + " (declaration may be too small)";
     }
 
     private enum Region { JUDGED, RING }
+
+    /**
+     * O-2(1): the canary reported coordinates and palette ids three times and the block's IDENTITY
+     * zero times, so the same signature (|Δid| = 4 at three different bases: 276, 296, 412) could
+     * not be attributed to a cause. {@code Block.getId} is the BLOCKSTATE palette id, so
+     * {@code Block.stateById} decodes it back to name + every property — which is the whole of the
+     * answer to 「무엇이 무엇으로 바뀌었는가」. Diagnostic only: nothing about the verdict changes.
+     */
+    private static String desc(int id) {
+        try {
+            return Block.stateById(id).toString();
+        } catch (RuntimeException e) {
+            return "id" + id + "(undecodable)";
+        }
+    }
+
+    /** How many changed cells get their full blockstate printed before the list is truncated. */
+    private static final int DETAIL_CAP = 8;
 
     private static String blockDiff(Snapshot base, Snapshot now, Region region) {
         int[] a = base.blockIds();
@@ -302,6 +326,7 @@ public final class TrialCanary {
         int jz1 = Math.min(bd[3], JUDGE_R) - 1;
         int changed = 0;
         String first = "?";
+        List<String> detail = new ArrayList<>();
         int at = 0;
         for (int dx = bd[0]; dx <= bd[1]; dx++) {
             for (int dz = bd[2]; dz <= bd[3]; dz++) {
@@ -314,6 +339,10 @@ public final class TrialCanary {
                     if (changed == 1) {
                         first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
                     }
+                    if (detail.size() < DETAIL_CAP) {
+                        detail.add(String.format("(%+d,%+d,%+d) %s => %s",
+                                dx, dy, dz, desc(a[at]), desc(b[at])));
+                    }
                 }
             }
         }
@@ -321,6 +350,8 @@ public final class TrialCanary {
             return "";
         }
         return (region == Region.JUDGED ? "coreBlocks changed:" : "outerBlocks changed:")
-                + changed + " first" + first;
+                + changed + " first" + first
+                + " states{" + String.join(" ; ", detail)
+                + (changed > detail.size() ? " ; +" + (changed - detail.size()) + " more" : "") + "}";
     }
 }

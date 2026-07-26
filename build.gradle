@@ -51,6 +51,11 @@ minecraft {
             if (project.hasProperty('bottestAuto')) {
                 property 'bottest.auto', project.getProperty('bottestAuto')
             }
+            // L-5 / O-2(3) single-variable arm: put doTileDrops back to true for one run so the
+            // K-7 pair (drops off + sweep moved before setup) can be separated.
+            if (project.hasProperty('bottestTileDrops')) {
+                property 'bottest.tiledrops', project.getProperty('bottestTileDrops')
+            }
         }
     }
 }

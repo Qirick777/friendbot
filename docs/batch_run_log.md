@@ -632,3 +632,82 @@ STALE 0, MISSING 0. PASS 48, FAIL 4.
 FAIL 4건: bot_path_blocked([INVALIDATES], canary MISMATCH — 격리 결함, bot_creeper_wall과 동일 서명),
 bot_persist_load / bot_dodge / bot_kite_execmon (이전 PASS 기록 없음 → 최초 기록).
 bot_kite_execmon은 설계서:958 서술과 하니스 expected가 충돌한다 — 스펙 충돌로 기록만 하고 멈춘다.
+
+# 블록 O — 진단 배치 (수정 없음)
+
+## O-0 bot_kite_execmon — 스펙 충돌 철회. 하니스가 옳다
+
+사용자 판정을 받아들인다. 설계서:958의 「대상이 이미 밀착 → 발화 아니오」는 **요구사항이 아니라
+결함 기록**이다. 바로 아래 :959-961이 그것을 결함이라 부르고 올바른 술어를 적고 고치지 않은 이유를
+밝힌다 — 「B의 결함은 속도가 아니라 적용 범위다 … 두 술어는 다르다 … 술어 변경은 B의 정의 변경이므로
+여기서 임의로 하지 않는다」. 내가 표의 한 칸만 읽고 그 아래 세 문장을 판정에 넣지 않았다.
+하니스를 고치지 않고 설계서도 고치지 않으며 FAIL을 유지한다.
+
+**부채 갱신 — 「신호 B의 술어(적용 범위)」: 예측 → 확인됨. T5.6 입력.**
+확인 측정값 (RUN_ID R20260726T072157Z-4478):
+
+    startedKiteable:true  execMonitorFired:false  ticksToExec:-1  ceiling:20
+    gapAtFlee:0.91  gapAtExec:-1.00  gapClosed:0.57  observedAtFlee:0.0000
+    intentOpenTicks:224  maxFailingTicks:3  failingTicksTotal:116  enterLine:0.2722
+
+설계서가 예측한 그대로다: 간격이 이미 0에 가깝고(gapAtFlee 0.91) 벌어지지 않는 상태에서
+d(gap)/dt 술어는 발화하지 않는다(execMonitorFired:false, ticksToExec:-1). 대조군
+`bot_kite_execmon_lat`은 같은 배치에서 PASS다 — 간격이 실제로 좁혀지는 조건에서는 B가 잡는다.
+**즉 B는 「느린」 것이 아니라 「이 실패 상태를 볼 수 없는」 것이다.** 술어 변경은 T5.6에서 결정한다.
+
+### O-0(3) hp 손실 15.7 → 23.7 (+51%)
+
+전제는 같다 — 봇 최대체력 200 (이 원장 301행). 나란히 댈 수 있는 이전 값은 **hp 15.7 하나뿐**이다.
+`gapAtFlee` / `gapClosed` / `failingTicksTotal` / `intentOpenTicks`의 이전 기록은 설계서에도
+이 원장에도 `docs/bottest_lines_blockK.txt`에도 **없다**. 설계서:958의 표 칸은 「없음 (hp 15.7 손실)」
+한 항목만 싣는다. 그러므로 「무엇이 달라졌는지」를 값으로 답할 수 있는 축은 현재 hp 하나뿐이고,
+그 하나로는 원인을 특정할 수 없다.
+
+특정을 막는 것이 무엇인지는 값으로 말할 수 있다. `intentOpenTicks:224`는 관측 창(대략 240틱)의
+93%다. 즉 봇은 창의 거의 전 구간을 「카이팅 의도가 열린 채 밀착」 상태로 서 있었고, 그동안 받는
+피해는 **B의 발화 여부가 아니라 그 구간 길이 × 대상 DPS**로 정해진다. 발화가 0인 두 실행에서
+hp 손실만 다른 것은 구간 길이나 대상의 타격 성공에 달린 문제이지 B의 상태 변화가 아니다.
+따라서 **+51%는 B의 악화 증거가 아니며, 개선 증거도 아니다.** 이 축은 대가의 크기를 재는 데
+쓸 수 없다 — 부채로 남긴다: 「execmon 계열에 구간 길이 정규화 지표(hp손실/intentOpenTick)가 없다」.
+
+## O-3 bot_persist_load — 코드 결함이 아니다. 하니스 전제가 배치에 의해 파괴됐다
+
+세 갈래 중 **(a)**다. 다만 「botExists가 저장 후 false로 남는다」가 아니라
+**「저장 자체가 이 실행 이전에 존재하지 않았다」**이다.
+
+증거 (파일:행):
+- `BotPersistLoadTest.java:9-12` 클래스 주석 — 「runs on the boot AFTER BotPersistSaveTest」.
+  이 하니스는 **두 번의 부팅**을 전제한다. 1회차가 저장하고 2회차가 복원한다.
+- `runlong4.sh:40` — 매 하니스마다 `rm -rf run/world`. 즉 배치는 하니스마다 **월드를 지우고**
+  단일 부팅으로 실행한다. bot_persist_save가 만든 저장은 bot_persist_load 차례가 오기 전에 삭제된다.
+- `BotManager.java:136-138` — `if (!data.botExists()) { LOGGER.info("[BOT] restore skipped — no bot recorded"); return; }`
+- 실측: `scratchpad/p5_bot_persist_load.log:870`
+  `[BOT] restore skipped ? no bot recorded` — 정확히 그 줄이 찍혔다. 복원 훅은 **호출됐고**,
+  기록이 없어서 스펙대로 아무것도 하지 않았다.
+
+즉 (b) 「훅이 호출되지 않는다」도 (c) 「배관 재실행이 실패한다」도 아니다. 훅은 돌았고 판단은 옳았다.
+**FAIL은 유형 #9(시나리오 전제 미기록)다** — 하니스는 2부팅 전제를 코드 주석에만 적었고
+`scenarioSpec()`으로 선언하지 않았으며, 배치 러너는 그 전제를 알 방법이 없었다.
+
+### O-3(2) 스펙 뒷절은 이번 실행이 확인했다
+
+「false면 스폰 안 함」(설계서:1260). `botExists=false`인 부팅에서 `restored:false, uuid:none`.
+**뒷절은 값으로 PASS다.** 판정 라인이 FAIL인 것은 앞절만 재기 때문이다 —
+하나의 하니스가 두 절을 반대 방향으로 물어보고 있고, 지금 배치 조건에서는 뒷절만 성립한다.
+
+### O-3(3) 원장 정정 — 크게
+
+    T1.2 검증 3(복원)은 통과 기록 없이 완료로 적혀 있었다.
+
+`bot_persist_load`의 PASS 기록은 `docs/bottest_lines_blockK.txt`(85 라인/48 하니스)에도,
+이 원장에도, 설계서에도 없다. Phase 1을 완료로 적은 근거에 이 항목의 값이 들어간 적이 없다.
+지금 이 하니스는 **단독 실행으로는 구조적으로 통과할 수 없다** — 러너가 월드를 지우기 때문이다.
+고치지 않는다(O-3(3) 지시). 회수 경로만 적어 둔다:
+`bot_persist_save` → (월드 보존) → `bot_persist_load`의 2부팅 쌍을 하나의 배치 단위로 다루고,
+그 전제를 `scenarioSpec()`에 싣는 것. 부채 (A) 하니스로 회수 가능.
+
+### O-3(4) 일상 사용에 미치는 영향
+
+**아직 알 수 없다** — 이번 값은 복원 경로를 시험하지 않았으므로 「서버 재시작 시 봇이 사라지는가」에
+대한 답이 아니다. 이 실행이 말하는 것은 「기록이 없으면 스폰하지 않는다」뿐이고, 기록이 있을 때의
+동작은 이 배치에서 한 번도 실행되지 않았다. 영향 문장을 지금 쓰면 그것이 곧 유형 #13이다.
