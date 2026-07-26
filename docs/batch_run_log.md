@@ -885,3 +885,52 @@ waterlogged(2) = 28개이고, 속성은 알파벳 순(distance, persistent, wate
 ### O-4(3) 이것은 문서 작업이다
 
 코드는 건드리지 않았다. 위 중립 서술이 이후 보고의 표준 표현이다.
+
+### O-2(3) L-5 단일 변수 확인 — doTileDrops는 원인이 아니다. K-7은 옳았다
+
+`-Dbottest.tiledrops=true`로 K-7의 두 변수 중 하나만 되돌린 팔. SCENARIO 라인에
+`doTileDrops=true`가 찍혀 두 팔이 섞일 수 없다. RUN_ID `O20260726T085316Z-9710`.
+
+    하니스                  doTileDrops=false        doTileDrops=true
+    bot_path_blocked        PASS 3/3 canary OK       FAIL 1/3 canary MISMATCH x2
+    bot_creeper_wall        FAIL 1/3 MISMATCH x2     FAIL 1/3 MISMATCH x2
+    bot_creeper_lowfuse     PASS 3/3 canary OK       PASS 3/3 canary OK
+
+drops=true 팔에서 새로 나온 어긋남의 정체:
+
+    bot_path_blocked  items 1->0; user/types[none|types:item=1,player=1] -> [none|types:player=1]
+    bot_creeper_wall  items 4->0; types[creeper=1,item=4,player=2] -> [creeper=1,player=2]
+
+**아이템 엔티티다.** 시공이 자연 블록을 부수며 떨군 드롭이 baseline에 잡히고, 다음 트라이얼의
+스윕이 그것을 지우면서 어긋난다 — K-7이 끄기로 한 바로 그 현상이며, **K-7의 판단은 값으로 옳다.**
+
+그리고 사용자 예측대로다: drops=true 팔의 `bot_path_blocked` 트라이얼 3에서 **잎 어긋남이 여전히
+같이 나온다** — `(+0,-1,-7) oak_leaves[distance=6] => oak_leaves[distance=5]`, id 260→256, 다시 |Δ|=4.
+**두 변수는 분리됐다.** 아이템 어긋남은 doTileDrops에 달려 있고, 잎 `distance` 어긋남은 달려 있지 않다.
+
+### O-2(4) 게이트 1(결정성)의 대상을 좁힐 근거
+
+같은 코드·같은 게이트에서 `bot_path_blocked`가 M-3 FAIL 1/3 → 블록 O 표준 팔 PASS 3/3로 뒤집혔다.
+`bot_creeper_lowfuse`는 K FAIL → L PASS → O PASS → O(drops) PASS. **비결정성은 재확인된다.**
+
+다만 이제 원인이 하나로 좁혀지므로 대상도 좁아진다. 어긋나는 칸은 예외 없이
+**「판정 코어(±7) 안이면서 하니스가 시공하지 않는 칸」**이었다. 판정 코어는
+`TrialCanary.java:299-302`가 선언 상자 ∩ ±8을 1칸 축소해 만들고, 시공 범위는 각 하니스 `setup()`의
+루프다. 두 범위를 코드에서 대조하면 「자연 지형을 판정하는 하니스」 목록이 값 없이도 나온다.
+
+시공이 판정 코어를 **완전히 덮는**(= 자연 지형을 판정하지 않는) 하니스:
+`bot_equip`(시공 ±8 ⊇ 코어 ±7), `bot_rule4_pierce/normal/axe`(−10..18 × ±12),
+`bot_rule_dcell`(−36..20 × ±44), `bot_kite_execmon/flip/recover`(−90..20 × ±10~12),
+`bot_warden_band_below`(−50..50 × ±8).
+
+시공이 **아예 없어** 판정 코어 전체가 자연 지형인 하니스:
+`bot_alive`, `bot_death`, `bot_persist_save`, `bot_persist_load`, `bot_phase2_combo`,
+`bot_ranged`, `bot_single`, `bot_coldstart_dist`.
+
+나머지는 부분 노출이다(예: `bot_creeper_wall` 시공 dx −6..8 × dz −4..4 → dx=−7과 dz ±5..7이 노출,
+관측된 21칸이 정확히 그 띠에 있다. `bot_path_blocked` 시공 −2..14 × ±4 → dz=−7 노출,
+관측된 칸이 `(+0,-1,-7)`이다).
+
+**제안**: M-5(1)의 52종 × n=10 대신, ① 위 「완전히 덮음」 목록을 결정성 후보에서 제외하고
+② 노출된 하니스 중 그 노출 띠에 **이웃 의존 블록**(잎·울타리·유리판·계단·waterlogged)이 실제로
+서 있는 것만 n=10을 돌린다. 대상 선정은 사용자 몫이다 — n=10은 돌리지 않았다.
