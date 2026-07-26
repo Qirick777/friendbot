@@ -42,6 +42,36 @@ public class BotProtection {
     private Mode mode = Mode.NONE;
     /** 9.2 diagnostics: which branch of the priority table fired, and what it picked. */
     private String lastRule = "none";
+    /**
+     * K-2(b) instrumentation. 9장 개입 경로가 실제로 실행됐는지를 값으로 남긴다. Incremented ONLY inside
+     * {@link #assignTarget}, which is the single place where 9장 hands a target to a combat
+     * controller — so a non-zero count is proof that the drop came from the intervention path and
+     * not from a side effect (proximity, retaliation, another layer's target).
+     */
+    private int engageAssignTicks;
+    private int engageMeleeTicks;
+    private int engageRangedTicks;
+
+    public int engageAssignTicks() {
+        return engageAssignTicks;
+    }
+
+    public int engageMeleeTicks() {
+        return engageMeleeTicks;
+    }
+
+    public int engageRangedTicks() {
+        return engageRangedTicks;
+    }
+
+    /** Harnesses call this in setup so the counters describe one trial, not the server's lifetime. */
+    public void resetCounters() {
+        engageAssignTicks = 0;
+        engageMeleeTicks = 0;
+        engageRangedTicks = 0;
+        lastRule = "none";
+        lastChosen = null;
+    }
     @Nullable
     private net.minecraft.world.entity.LivingEntity lastChosen;
 
@@ -269,6 +299,12 @@ public class BotProtection {
     // --- actions ---
 
     private void assignTarget(AICompanionBot bot, LivingEntity target, boolean useMelee) {
+        engageAssignTicks++;
+        if (useMelee) {
+            engageMeleeTicks++;
+        } else {
+            engageRangedTicks++;
+        }
         // ch.14: 「교전 모드가 무기를 요청하면(근접→검, 원거리→활) 해당 카테고리 최고를 메인핸드로
         // 스왑」. The equipment manager had the swap but no requester, so choosing ranged mode left a
         // sword in hand and the bot shot nothing (measured in bot_protect_armed: mode ENGAGE_RANGED

@@ -115,7 +115,8 @@ public final class BotTestRegistry {
         register("bot_dodge", BotDodgeTest::new);
         register("bot_shield", BotShieldTest::new);
         // T4.3 user protection.
-        register("bot_protect_intervene", BotProtectInterveneTest::new);
+        register("bot_protect_intervene", BotProtectInterveneTest.Reachable::new);
+        register("bot_protect_intervene_none", BotProtectInterveneTest.Unreachable::new);
         register("bot_protect_priority", BotProtectPriorityTest::new);
         // T4.4 environment manipulation (fall survival + creeper wall).
         register("bot_fall_water", BotFallWaterTest::new);
@@ -157,6 +158,7 @@ public final class BotTestRegistry {
         register("bot_idle_wander", BotIdleTest.Wander::new);
         // R1 트리거 정정 (7장 「적 공격 모션 or 투사체」 + 6.2 「투사체 발사 관측」).
         register("bot_r1_swing", BotR1TriggerTest.Swing::new);
+        register("bot_r1_projectile", BotR1TriggerTest.Projectile::new);
         register("bot_r1_idle", BotR1TriggerTest.Idle::new);
         register("bot_r1_proximity", BotR1TriggerTest.Proximity::new);
         // T5.5 자원 조달 (던진 것 수락·드롭 줍기).

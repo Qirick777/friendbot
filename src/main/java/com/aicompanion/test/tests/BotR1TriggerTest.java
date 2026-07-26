@@ -55,7 +55,7 @@ public class BotR1TriggerTest implements BotTest {
     private boolean observedRangedSeen;
     private int swingsIssued;
 
-    public enum Mode { SWING, IDLE, PROXIMITY }
+    public enum Mode { SWING, PROJECTILE, IDLE, PROXIMITY }
 
     protected BotR1TriggerTest(Mode mode) {
         this.mode = mode;
@@ -80,6 +80,7 @@ public class BotR1TriggerTest implements BotTest {
     public String name() {
         return switch (mode) {
             case SWING -> "bot_r1_swing";
+            case PROJECTILE -> "bot_r1_projectile";
             case IDLE -> "bot_r1_idle";
             case PROXIMITY -> "bot_r1_proximity";
         };
@@ -127,8 +128,8 @@ public class BotR1TriggerTest implements BotTest {
         bot.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.SHIELD));
         bot.equipment().invalidate();
 
-        int offset = mode == Mode.PROXIMITY ? 10 : 2;
-        mob = mode == Mode.PROXIMITY
+        int offset = (mode == Mode.PROXIMITY || mode == Mode.PROJECTILE) ? 10 : 2;
+        mob = (mode == Mode.PROXIMITY || mode == Mode.PROJECTILE)
                 ? ctx.env.spawn(EntityType.SKELETON, o.offset(offset, 0, 0))
                 : ctx.env.spawn(EntityType.ZOMBIE, o.offset(offset, 0, 0));
         if (mob != null) {
@@ -158,6 +159,21 @@ public class BotR1TriggerTest implements BotTest {
             mob.swing(InteractionHand.MAIN_HAND);
             swingsIssued++;
         }
+        // 7장의 두 번째 항 — 「투사체가 봇 히트박스로 향함」. The skeleton has NoAi and never shoots on
+        // its own, so the harness fires FOR it: the arrow's owner is the skeleton, which is also what
+        // 6.2's 「투사체 발사 관측」 reads. Re-fired periodically so the window is not one lucky tick.
+        if (mode == Mode.PROJECTILE && mob != null && mob.isAlive() && ctx.elapsedTicks % 20 == 0) {
+            net.minecraft.world.entity.projectile.Arrow arrow =
+                    new net.minecraft.world.entity.projectile.Arrow(ctx.level,
+                            mob.getX(), mob.getY() + 1.0, mob.getZ());
+            arrow.setOwner(mob);
+            double dx = bot.getX() - mob.getX();
+            double dy = (bot.getY() + 1.0) - (mob.getY() + 1.0);
+            double dz = bot.getZ() - mob.getZ();
+            arrow.shoot(dx, dy, dz, 1.6F, 0.0F);
+            ctx.level.addFreshEntity(arrow);
+            swingsIssued++;   // reused as "stimuli issued"
+        }
         if (bot.reflex().r1Fired()) {
             r1Ticks++;
         }
@@ -179,6 +195,8 @@ public class BotR1TriggerTest implements BotTest {
     public BotTestResult judge(BotTestContext ctx) {
         boolean ok = switch (mode) {
             case SWING -> r1Ticks > 0 && attackMotionTicks > 0 && blockingTicks > 0;
+            // ①의 두 번째 절반: 투사체가 실제로 봇을 향할 때의 발화.
+            case PROJECTILE -> r1Ticks > 0 && observedRangedSeen;
             case IDLE -> r1Ticks == 0 && attackMotionTicks == 0 && blockingTicks == 0;
             case PROXIMITY -> r1Ticks == 0 && !observedRangedSeen;
         };
@@ -187,14 +205,17 @@ public class BotR1TriggerTest implements BotTest {
                 name(), r1Ticks, attackMotionTicks, blockingTicks, swingsIssued, observedRangedSeen);
         String measured = String.format(
                 "arm:%s,mob:%s,dist:%d,r1FiredTicks:%d,attackMotionTicks:%d,blockingTicks:%d,"
-                        + "swingsIssued:%d,observedRanged:%b,runTicks:%d",
+                        + "stimuliIssued:%d,observedRanged:%b,runTicks:%d,r1FireRate:%.3f",
                 mode.name().toLowerCase(),
                 mob == null ? "none" : EntityType.getKey(mob.getType()).getPath(),
-                mode == Mode.PROXIMITY ? 10 : 2,
-                r1Ticks, attackMotionTicks, blockingTicks, swingsIssued, observedRangedSeen, RUN);
+                (mode == Mode.PROXIMITY || mode == Mode.PROJECTILE) ? 10 : 2,
+                r1Ticks, attackMotionTicks, blockingTicks, swingsIssued, observedRangedSeen, RUN,
+                RUN == 0 ? 0.0 : (double) r1Ticks / RUN);
         String expected = switch (mode) {
             case SWING -> "적 공격 모션 in reach + shield held → R1 fires and the shield actually goes "
                     + "up (isBlocking observed)";
+            case PROJECTILE -> "투사체가 봇 히트박스로 향함 → R1 fires, and 6.2's observation predicate "
+                    + "flips observedRanged to true";
             case IDLE -> "same mob, same distance, no swing → R1 must not fire at all";
             case PROXIMITY -> "a skeleton 10 blocks away that has never fired → under 6.2's "
                     + "observation predicate R1 must not fire (the old class test fired here)";
@@ -206,6 +227,13 @@ public class BotR1TriggerTest implements BotTest {
     public static class Swing extends BotR1TriggerTest {
         public Swing() {
             super(Mode.SWING);
+        }
+    }
+
+    /** 투사체 자극 — 7장 조건의 두 번째 절반. */
+    public static class Projectile extends BotR1TriggerTest {
+        public Projectile() {
+            super(Mode.PROJECTILE);
         }
     }
 

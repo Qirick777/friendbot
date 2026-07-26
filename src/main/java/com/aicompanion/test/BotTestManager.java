@@ -130,6 +130,12 @@ public final class BotTestManager {
                     .set(false, server);
             lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_RANDOMTICKING)
                     .set(0, server);
+            // K-7: the debris the post-setup sweep existed to remove is BLOCK DROPS from arena
+            // construction. Turning the drops off removes it at the source, which is what lets the
+            // sweep move to its correct position (before setup) instead of running after it and
+            // deleting entities the harness had just placed on purpose.
+            lv.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS)
+                    .set(false, server);
         }
         LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
                 test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
@@ -161,16 +167,19 @@ public final class BotTestManager {
                     ctx.env.clearEntities(ctx.origin,
                             TrialCanary.sweepRadius(active.arenaBounds()));
                 }
+                // R.2 순서 제약 (K-7): the sweep runs BEFORE setup(), never after. Running it after
+                // made the contamination guard a contamination source — it deleted the very item
+                // entity BotPickupTest had just placed as its subject (measured: canary baseline
+                // items=0, itemEntityGone:true, fetchTicks:0 in all three arms). Block drops are off
+                // (doTileDrops=false above), so construction produces no debris for a post-setup
+                // sweep to catch in the first place.
+                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin, active.arenaBounds(),
+                        active.itemsAreSubject());
                 active.setup(ctx);
                 setupDone = true;
                 ctx.elapsedTicks = 0;
                 // Isolation contract. Trial 1 defines the baseline; every later trial must start
                 // from the same state, checked with values instead of assumed.
-                // Building an arena over natural terrain drops item entities on the first trial and
-                // over flat stone on none of the others. That debris is a by-product of construction,
-                // not harness state, so it is swept before the snapshot on every trial alike.
-                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin, active.arenaBounds(),
-                        active.itemsAreSubject());
                 TrialCanary.Snapshot now = TrialCanary.capture(
                         ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current(),
                         active.arenaBounds());
