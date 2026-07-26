@@ -40,6 +40,7 @@ public class BotAbilityPathTest implements BotTest {
     private boolean tookCliff;
     private String tagAtDescent = "none";
     private int pathLen = -1;
+    private int biggestDrop;
     private float hpStart;
     private float hpEnd;
 
@@ -132,14 +133,23 @@ public class BotAbilityPathTest implements BotTest {
         path = s.result();
         pathLen = path == null ? -1 : path.size();
         tookCliff = false;
+        biggestDrop = 0;
         if (path != null) {
-            for (BlockPos p : path) {
-                String tag = s.actionTagAt(p);
-                if (tag != null) {
-                    tagAtDescent = tag;
-                }
-                if (Math.abs(p.getZ() - o.getZ()) <= 3 && p.getY() < o.getY() - 3) {
-                    tookCliff = true;   // descended near the direct line, not out at the detour
+            // Detect the DESCENT EVENT, not a position. Being low and near the direct line is also
+            // true of the return leg along the bottom shelf after taking the staircase — the first
+            // version measured that and called a 39-node detour "took the cliff". A capability
+            // descent is a single step whose Y falls further than maxSafeFall.
+            for (int i = 1; i < path.size(); i++) {
+                BlockPos prev = path.get(i - 1);
+                BlockPos cur = path.get(i);
+                int drop = prev.getY() - cur.getY();
+                biggestDrop = Math.max(biggestDrop, drop);
+                if (drop > BotPathfinder.MAX_SAFE_FALL_PUBLIC) {
+                    tookCliff = true;
+                    String tag = s.actionTagAt(cur);
+                    if (tag != null) {
+                        tagAtDescent = tag;
+                    }
                 }
             }
         }
@@ -165,9 +175,9 @@ public class BotAbilityPathTest implements BotTest {
                 : (reachable && !tookCliff);
 
         String measured = String.format(
-                "waterBucket:%b,pathFound:%b,pathLen:%d,tookCliff:%b,actionTag:%s,cliffDrop:%d,"
+                "waterBucket:%b,pathFound:%b,pathLen:%d,tookCliff:%b,biggestSingleDrop:%d,actionTag:%s,cliffDrop:%d,"
                         + "maxSafeFall:%d,hp:%.1f->%.1f",
-                withBucket, reachable, pathLen, tookCliff, tagAtDescent, CLIFF_DROP,
+                withBucket, reachable, pathLen, tookCliff, biggestDrop, tagAtDescent, CLIFF_DROP,
                 BotPathfinder.MAX_SAFE_FALL_PUBLIC, hpStart, hpEnd);
         String expected = withBucket
                 ? "bucket held → the path descends the 6-block cliff directly and carries the water "
