@@ -180,6 +180,7 @@ public class BotProtection {
         boolean allowMelee = CombatRules.allowMelee(chosen, CombatStats.of(bot),
                 CombatRules.DEFAULT_SAFETY);
         boolean hasRanged = hasBowAndArrows(bot);
+        bot.meleeCombat().setRule2Override(false);
         if (useMelee && !allowMelee && hasRanged) {
             useMelee = false;
             LOGGER.info("[PROTECT] rule2: melee denied on {} -> ranged (bow available)",
@@ -201,6 +202,9 @@ public class BotProtection {
             LOGGER.info("[PROTECT] rule2 says lose vs {} but no ranged option -> engage anyway "
                             + "(user protection is not gated on winning)",
                     chosen.entity.getType().toShortString());
+            // A-4: the melee controller now enforces rule 2 itself. This layer's documented
+            // override has to be handed to it explicitly, or the decision above becomes a no-op.
+            bot.meleeCombat().setRule2Override(true);
         }
         // --- rule 1 (6.3 카이팅 가능성) — records the D cell for the ranged controller ----------
         // canKite=false AND allowMelee=false is the cell design 6.3 does not define: rule 1 says

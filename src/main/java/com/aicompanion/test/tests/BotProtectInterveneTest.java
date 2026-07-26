@@ -217,9 +217,11 @@ public class BotProtectInterveneTest implements BotTest {
         LOGGER.info("[PROTECT] intervene judge: aggroDrop={} neutralDrop={} naturalTarget={} mode={}",
                 aggroDrop, neutralDrop, naturalTargetSeen, protMode);
         String measured = String.format(
-                "aggroDrop:%.1f,neutralDrop:%.1f,naturalTarget:%b,modeAtEnd:%s,modeEngageTicks:%d,"
+                "intervened:%b,engageDurTicks:%d,aggroDrop:%.1f,"
+                        + "neutralDrop:%.1f,naturalTarget:%b,modeAtEnd:%s,modeEngageTicks:%d,"
                         + "modeNoneTicks:%d,engagePathTicks:%d,aggroInInvadeRadiusTicks:%d,"
                         + "aggroUserDistMin:%.2f,arm:%s",
+                engagePathTicks > 0, engagePathTicks,
                 aggroDrop, neutralDrop, naturalTargetSeen, modeAtEnd, modeEngageTicks, modeNoneTicks,
                 engagePathTicks, aggroDistOkTicks, aggroUserDistMin,
                 reachable ? "reachable" : "unreachable-control");

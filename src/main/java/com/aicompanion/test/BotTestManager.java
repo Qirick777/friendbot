@@ -144,8 +144,8 @@ public final class BotTestManager {
         // than buried in setup(). Empty means the harness has not stated any — which is itself the
         // finding, so it is logged as "(unstated)" instead of being silently skipped.
         String spec = test.scenarioSpec();
-        LOGGER.info("[BOTTEST] {} runId={} SCENARIO doTileDrops={} repeats={}{} | {}",
-                test.name(), RUN_ID, TILE_DROPS, repeatsOf(test),
+        LOGGER.info("[BOTTEST] {} runId={} SCENARIO seed={} doTileDrops={} repeats={}{} | {}",
+                test.name(), RUN_ID, liveSeed(level), TILE_DROPS, repeatsOf(test),
                 REPEATS_OVERRIDE > 0 ? "(overridden)" : "",
                 spec == null || spec.isBlank() ? "(unstated)" : spec);
         test.resetAggregate();
@@ -185,6 +185,27 @@ public final class BotTestManager {
      */
     public static final int REPEATS_OVERRIDE =
             Integer.getInteger("bottest.repeats", 0);
+
+    /**
+     * A-1: the three FIXED world seeds. A single seed overfits one terrain and a random one cannot
+     * be reproduced — R-2 measured the cost of the latter: the same code and the same premise gave
+     * bot_warden_live_speed 0.0000 in two batches and 0.2658 in a third, purely because the runner
+     * regenerated the world every run. §6 already uses this shape (「워든 정지표적 접근 mean 0.2380,
+     * 90교전 3시드」).
+     *
+     * <p>**These values must never change.** Every cross-block comparison in this project assumes
+     * them; changing one silently invalidates every prior measurement taken under it.</p>
+     */
+    public static final long[] FIXED_SEEDS = {20260726001L, 20260726002L, 20260726003L};
+
+    /**
+     * The seed actually in force, read from the LIVE world rather than from the property that
+     * requested it. A property says what was asked for; {@code ServerLevel.getSeed()} says what the
+     * terrain really is, and the gap between the two is exactly where 유형 #8 lives.
+     */
+    private static long liveSeed(ServerLevel level) {
+        return level.getSeed();
+    }
 
     /** The trial count actually used: the override when set, else the harness's declaration. */
     private static int repeatsOf(BotTest t) {
@@ -454,8 +475,8 @@ public final class BotTestManager {
 
         String verdict = r.pass() ? "PASS" : "FAIL";
         // Authoritative judgment line (R.2 format).
-        LOGGER.info("[BOTTEST] {} {} runId={} measured={} expected={}",
-                name, verdict, RUN_ID, r.measured(), r.expected());
+        LOGGER.info("[BOTTEST] {} {} runId={} seed={} measured={} expected={}",
+                name, verdict, RUN_ID, liveSeed(ctx.level), r.measured(), r.expected());
         if (ctx.source != null) {
             final String msg = "[BOTTEST] " + name + " " + verdict + " runId=" + RUN_ID
                     + " measured=" + r.measured();

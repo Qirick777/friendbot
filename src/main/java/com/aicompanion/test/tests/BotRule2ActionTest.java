@@ -143,6 +143,10 @@ public class BotRule2ActionTest implements BotTest {
             targetHpStart = target.getHealth();
         }
         minDist = Double.MAX_VALUE;
+        AICompanionBot rb = BotManager.current();
+        if (rb != null) {
+            rb.meleeCombat().resetRule2Counters();
+        }
         ticksInMeleeRange = 0;
         allowMeleeSeen = null;
         botApproachSum = 0;
@@ -182,6 +186,13 @@ public class BotRule2ActionTest implements BotTest {
     public BotTestResult judge(BotTestContext ctx) {
         double dmgDealt = targetHpStart - targetHpEnd;
         // Judged on what the BOT did: did it move toward the target, and did it land melee damage.
+        // A-4(2): 판정량은 행동이다. 플래그가 아니라 「접근했는가·근접 사거리에 머물렀는가」를
+        // 재고, 게이트 자체의 틱 수를 함께 실어 유형 #10(판정-행동 단절)을 다시 만들지 않는다.
+        AICompanionBot gb = BotManager.current();
+        int gateDenied = gb == null ? -1 : gb.meleeCombat().rule2DeniedTicks();
+        int gateAllowed = gb == null ? -1 : gb.meleeCombat().rule2AllowedTicks();
+        int gateUnknown = gb == null ? -1 : gb.meleeCombat().rule2UnknownTicks();
+        String gateLast = gb == null ? "n/a" : gb.meleeCombat().lastRule2();
         boolean approached = botApproachSum > 1.0;
         boolean ok = loseable
                 ? (!approached && dmgDealt <= 0.01)  // refused: did not close, did not hit
@@ -192,9 +203,11 @@ public class BotRule2ActionTest implements BotTest {
                 String.format("%.2f", minDist), ticksInMeleeRange, String.format("%.1f", dmgDealt));
         String measured = String.format(
                 "allowMelee:%s,botApproachSum:%.2f,minDist:%.2f,meleeRange:%.1f,"
-                        + "ticksInMeleeRange:%d,damageDealt:%.1f,targetHp:%.0f->%.0f",
+                        + "ticksInMeleeRange:%d,damageDealt:%.1f,targetHp:%.0f->%.0f,"
+                        + "rule2Denied:%d,rule2Allowed:%d,rule2Unknown:%d,lastRule2:%s",
                 String.valueOf(allowMeleeSeen), botApproachSum, minDist, MELEE_RANGE,
-                ticksInMeleeRange, dmgDealt, targetHpStart, targetHpEnd);
+                ticksInMeleeRange, dmgDealt, targetHpStart, targetHpEnd,
+                gateDenied, gateAllowed, gateUnknown, gateLast);
         String expected = loseable
                 ? "rule 2 denies melee → the BOT does not move toward the target and deals no damage"
                 : "rule 2 allows melee → the BOT moves toward the target and deals damage";
