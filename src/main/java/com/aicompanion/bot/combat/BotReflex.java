@@ -238,10 +238,19 @@ public class BotReflex {
         return null;
     }
 
+    /**
+     * ANY live enemy within evade range holding an axe disables the shield, not just the closest one.
+     *
+     * <p>This used to return on the first target in the distance-sorted list, so an axe wielder that
+     * was not the nearest enemy was invisible to it. Measured in bot_rule4_axe: with a stationary axe
+     * zombie at 2 blocks and an approaching skeleton, the axe holder occupied the nearest slot for
+     * only 69 of 220 ticks and the shield went up for the rest.</p>
+     */
     private static boolean nearestEnemyHasAxe(AICompanionBot bot) {
         for (TargetInfo t : bot.perception().targets) {
-            if (t.entity != null && t.entity.isAlive()) {
-                return t.entity.getMainHandItem().getItem() instanceof AxeItem;
+            if (t.entity != null && t.entity.isAlive() && t.distance <= RANGED_EVADE_DIST
+                    && t.entity.getMainHandItem().getItem() instanceof AxeItem) {
+                return true;
             }
         }
         return false;

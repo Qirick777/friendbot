@@ -56,6 +56,14 @@ public class BotRule1ActionTest implements BotTest {
      * lateral 0.00 — pure pushback, no input. The decision rule 1 changes is the command.
      */
     private int retreatCommandTicks;
+    /**
+     * Outcome, not intent. retreatCommandTicks says the controller ASKED to open the band; that is a
+     * step back from R.2's value judgement and is itself a small type-#10 (a decision measured by
+     * what it commands rather than what it produces). These record whether the command actually
+     * moved the distance.
+     */
+    private double gapAtFirstRetreat = -1;
+    private double gapMaxAfterRetreat = -1;
 
     protected BotRule1ActionTest(boolean fast) {
         this.fast = fast;
@@ -121,6 +129,8 @@ public class BotRule1ActionTest implements BotTest {
         canKiteSeen = null;
         ticksInside = 0;
         retreatCommandTicks = 0;
+        gapAtFirstRetreat = -1;
+        gapMaxAfterRetreat = -1;
     }
 
     @Override
@@ -153,6 +163,9 @@ public class BotRule1ActionTest implements BotTest {
                         ticksInside++;
                         if (bot.zza < -0.5F) {
                             retreatCommandTicks++;
+                            if (gapAtFirstRetreat < 0) {
+                                gapAtFirstRetreat = d;
+                            }
                         }
                         radialAwaySum += -(mx * ux + mz * uz);   // + = moving away from the target
                         lateralSum += Math.abs(mx * (-uz) + mz * ux);
@@ -161,6 +174,9 @@ public class BotRule1ActionTest implements BotTest {
                 break;
             }
         }
+        if (gapAtFirstRetreat >= 0) {
+            gapMaxAfterRetreat = Math.max(gapMaxAfterRetreat, d);
+        }
         lastBotPos = bot.position();
         return ctx.elapsedTicks >= RUN;
     }
@@ -168,19 +184,23 @@ public class BotRule1ActionTest implements BotTest {
     @Override
     public BotTestResult judge(BotTestContext ctx) {
         boolean retreated = retreatCommandTicks > 0;
-        boolean ok = fast ? !retreated : retreated;
+        double gapGain = (gapAtFirstRetreat >= 0 && gapMaxAfterRetreat >= 0)
+                ? gapMaxAfterRetreat - gapAtFirstRetreat : 0.0;
+        // The kite arm must show the command WORKED, not merely that it was issued.
+        boolean ok = fast ? !retreated : (retreated && gapGain > 0.5);
 
         LOGGER.info("[RULE1] {} canKite={} ticksInsideBand={} retreatCmd={} radialAway={} lateral={}",
                 name(), canKiteSeen, ticksInside, retreatCommandTicks,
                 String.format("%.2f", radialAwaySum), String.format("%.2f", lateralSum));
         String measured = String.format(
                 "canKite:%s,ticksInsideBand:%d,retreatCommandTicks:%d,radialAwaySum(incl.pushback):%.2f,"
-                        + "lateralSum:%.2f,injectedRatio:%.2f",
+                        + "lateralSum:%.2f,gapAtFirstRetreat:%.2f,gapMaxAfter:%.2f,gapGain:%+.2f,"
+                        + "injectedRatio:%.2f",
                 String.valueOf(canKiteSeen), ticksInside, retreatCommandTicks, radialAwaySum,
-                lateralSum, fast ? 1.15 : 0.35);
+                lateralSum, gapAtFirstRetreat, gapMaxAfterRetreat, gapGain, fast ? 1.15 : 0.35);
         String expected = fast
                 ? "canKite=false → the controller issues NO retreat command inside the band"
-                : "canKite=true → the controller DOES command a retreat to hold the band";
+                : "canKite=true → the controller commands a retreat AND the gap actually grows";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
     }
 

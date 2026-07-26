@@ -129,9 +129,27 @@ public class BotProtection {
         // (the user's survival) fails if the bot dies protecting them.
         boolean allowMelee = CombatRules.allowMelee(chosen, CombatStats.of(bot),
                 CombatRules.DEFAULT_SAFETY);
-        if (useMelee && !allowMelee) {
+        boolean hasRanged = hasBowAndArrows(bot);
+        if (useMelee && !allowMelee && hasRanged) {
             useMelee = false;
-            LOGGER.info("[PROTECT] rule2 veto: melee denied on {} (allowMelee=false) -> ranged",
+            LOGGER.info("[PROTECT] rule2: melee denied on {} -> ranged (bow available)",
+                    chosen.entity.getType().toShortString());
+        } else if (useMelee && !allowMelee) {
+            // Rule 2 says this fight is lost, and there is no ranged option. Engage anyway.
+            //
+            // PROVISIONAL — final arbitration belongs to T5.6, whose spec covers
+            // 「계층 간 우선순위 충돌 해소(반사>판단, 생존>교전, 유저보호 조율)」.
+            //
+            // Rule 2 asks "do I win"; user protection asks "does the USER die". Those are different
+            // questions and rule 2 must not answer the second one. The bot has R0 totem and the
+            // survival state machine to fall back on; the user has neither. The purpose of
+            // intervening is not victory but pulling aggro — which is why aggroDrop is the judged
+            // value — and a losing fight still buys the user time. Doing nothing is the worst
+            // outcome available: measured, gating intervention on rule 2 produced
+            // aggroDrop 97.4 -> 0.0 with mode ENGAGE_RANGED and no bow, i.e. the bot stood still
+            // while the user was hit.
+            LOGGER.info("[PROTECT] rule2 says lose vs {} but no ranged option -> engage anyway "
+                            + "(user protection is not gated on winning)",
                     chosen.entity.getType().toShortString());
         }
         // --- rule 1 (6.3 카이팅 가능성) — records the D cell for the ranged controller ----------

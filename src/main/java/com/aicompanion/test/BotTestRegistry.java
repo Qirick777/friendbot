@@ -23,6 +23,7 @@ import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
 import com.aicompanion.test.tests.BotPearlTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
+import com.aicompanion.test.tests.BotProtectArmedTest;
 import com.aicompanion.test.tests.BotProtectInterveneTest;
 import com.aicompanion.test.tests.BotProtectPriorityTest;
 import com.aicompanion.test.tests.BotRangedTest;
@@ -132,6 +133,8 @@ public final class BotTestRegistry {
         register("bot_rule_dcell", BotRuleDCellTest::new);
         // T5.2 장비 관리자.
         register("bot_equip", BotEquipTest::new);
+        register("bot_protect_armed", BotProtectArmedTest.Armed::new);
+        register("bot_protect_unarmed", BotProtectArmedTest.Unarmed::new);
         register("bot_kite_flip", BotKiteFlipTest::new);
         register("bot_kite_band_latch", BotKiteBandLatchTest::new);
         register("bot_kite_recover", BotKiteRecoverTest::new);
