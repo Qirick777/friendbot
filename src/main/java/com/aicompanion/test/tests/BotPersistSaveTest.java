@@ -25,12 +25,13 @@ public class BotPersistSaveTest implements BotTest {
         return NO_BUILD;
     }
 
-    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    /** Q-4(4) + P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
     @Override
     public String scenarioSpec() {
-        return "관측 200틱, 트라이얼 1회. 시공 범위 선언: 없음(NO_BUILD) — 블록 판정 영역이 비어 있고 엔티티/봇 상태만 판정한다. 유저 "
-                + "없음(TestUser.spawn 미호출) → Perception.java:131이 봇 외 플레이어를 찾지 못해 user==null → "
-                + "BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성. ";
+        return "2부팅 쌍의 **앞쪽**이다. 새 world에서 봇을 스폰하고 saveEverything으로 "
+                + "playerdata와 SavedData(botExists/UUID)를 디스크에 내린다. 이 하니스의 PASS는 "
+                + "다음 부팅의 bot_persist_load가 성립하기 위한 전제이며, 그 사이에 world 디렉터리가 "
+                + "지워지면 쌍이 깨진다(O-3의 실패 원인). 시공 없음(NO_BUILD). 유저 없음.";
     }
 
     @Override

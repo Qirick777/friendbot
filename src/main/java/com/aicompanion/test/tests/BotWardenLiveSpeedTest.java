@@ -135,8 +135,12 @@ public class BotWardenLiveSpeedTest implements BotTest {
         }
         bot.setHealth(bot.getMaxHealth());
         // The bot stays put; only the warden moves, so the observation is purely its approach.
-        bot.setDeltaMovement(Vec3.ZERO);
-        bot.moveTo(ctx.origin.getX() + 0.5, ctx.origin.getY(), ctx.origin.getZ() + 0.5, 90.0F, 0.0F);
+        // Q-3: the pin is now a HOOK so a single-variable arm can release it. Default true keeps
+        // this harness byte-for-byte identical in behaviour — the arm is a subclass, not an edit.
+        if (pinBot()) {
+            bot.setDeltaMovement(Vec3.ZERO);
+            bot.moveTo(ctx.origin.getX() + 0.5, ctx.origin.getY(), ctx.origin.getZ() + 0.5, 90.0F, 0.0F);
+        }
         if (ctx.elapsedTicks % 40 == 0) {
             warden.increaseAngerAt(bot);
             warden.setAttackTarget(bot);
@@ -200,5 +204,37 @@ public class BotWardenLiveSpeedTest implements BotTest {
         String expected = "a MOVING warden's observed speed is non-zero and below the bot's sprint, "
                 + "and rule 1 derives canKite=true from that measurement (not from a pinned 0.0)";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);
+    }
+
+    /**
+     * Q-3(1) 단일 변수: 봇을 매 틱 고정할 것인가. 기본 true = 기존 하니스 그대로.
+     *
+     * <p>가설: 완전히 정지한 대상은 진동을 발생시키지 않고, 워든의 경로 갱신은 진동에 의존한다.
+     * 고정만 풀었을 때 워든이 움직이기 시작하면 가설이 확인되고, 움직이지 않으면 원인은 다른 곳이다.
+     * 다른 변수는 하나도 건드리지 않는다 — 워든 스폰·anger·target·거리·관측 창 전부 동일하다.</p>
+     */
+    protected boolean pinBot() {
+        return true;
+    }
+
+    /** Q-3(1) 시험 팔: 고정만 해제한다. 판정 기준은 부모와 같다. */
+    public static class Unpinned extends BotWardenLiveSpeedTest {
+        @Override
+        protected boolean pinBot() {
+            return false;
+        }
+
+        @Override
+        public String name() {
+            return "bot_warden_live_unpin";
+        }
+
+        @Override
+        public String scenarioSpec() {
+            return "Q-3(1) 단일 변수 팔. bot_warden_live_speed와 모든 전제가 같고 "
+                    + "**봇 고정(setDeltaMovement(ZERO) + moveTo(origin))만 해제**했다. "
+                    + "봇이 스스로 움직이므로 관측된 워든 속도는 순수 접근 속도가 아니다 — "
+                    + "이 팔의 목적은 속도값 생산이 아니라 「워든이 움직이기 시작하는가」 하나다.";
+        }
     }
 }

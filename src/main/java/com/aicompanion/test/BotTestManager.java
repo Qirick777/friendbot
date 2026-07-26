@@ -189,7 +189,9 @@ public final class BotTestManager {
     /** The trial count actually used: the override when set, else the harness's declaration. */
     private static int repeatsOf(BotTest t) {
         int declared = Math.max(1, t.repeats());
-        return REPEATS_OVERRIDE > 0 && declared > 1 ? REPEATS_OVERRIDE : declared;
+        // Q-5(2): the override must also be able to LIFT a single-shot harness to n>=3 — the whole
+        // point there is to get a trial-to-trial spread for a harness that never had one.
+        return REPEATS_OVERRIDE > 0 ? REPEATS_OVERRIDE : declared;
     }
 
     private static BotTestResult withMoveOwner(BotTestResult r) {

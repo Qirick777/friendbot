@@ -338,6 +338,48 @@ public final class TrialCanary {
     /** How many changed cells get their full blockstate printed before the list is truncated. */
     private static final int DETAIL_CAP = 8;
 
+    /**
+     * Q-1(3): properties a block derives from its NEIGHBOURS rather than from how it was placed.
+     * A ring-1 cell whose block type is unchanged and whose only differing properties are in this
+     * set is the known, unfixable world-gen drift (P-1(4): 764 leaf cells re-deriving every trial),
+     * and it is counted rather than printed. Anything else — a different block, or a property NOT
+     * in this list — is printed in full.
+     *
+     * <p>이 목록이 판별식의 전부다. 목록에 없는 속성이 바뀌면 [RING1]이다 — 억제가 아니라 분류이므로
+     * 판별식이 좁을수록 안전하다(모르는 것은 전부 출력 쪽으로 떨어진다).</p>
+     * <ul>
+     *   <li>{@code distance} — 잎·비계: 가장 가까운 원목/지지대까지의 거리</li>
+     *   <li>{@code north/east/south/west/up/down} — 울타리·유리판·담장·덩굴·레드스톤 연결</li>
+     *   <li>{@code shape} — 계단·레일: 이웃 계단/레일에서 도출되는 모서리 형태</li>
+     *   <li>{@code waterlogged} — 이웃에서 흘러든 유체. 유체 복귀는 §4가 이미 링1 소음으로 기록한 현상</li>
+     * </ul>
+     */
+    private static final java.util.Set<String> NEIGHBOUR_DERIVED = java.util.Set.of(
+            "distance", "north", "east", "south", "west", "up", "down", "shape", "waterlogged");
+
+    /** True iff same block type and every differing property is neighbour-derived. */
+    private static boolean isKnownNeighbourDrift(int idA, int idB) {
+        try {
+            var a = Block.stateById(idA);
+            var b = Block.stateById(idB);
+            if (a.getBlock() != b.getBlock()) {
+                return false;
+            }
+            boolean anyDiff = false;
+            for (var prop : a.getProperties()) {
+                if (!java.util.Objects.equals(a.getValue(prop), b.getValue(prop))) {
+                    if (!NEIGHBOUR_DERIVED.contains(prop.getName())) {
+                        return false;
+                    }
+                    anyDiff = true;
+                }
+            }
+            return anyDiff;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     private static String blockDiff(Snapshot base, Snapshot now, Region region) {
         int[] a = base.blockIds();
         int[] b = now.blockIds();
@@ -355,6 +397,8 @@ public final class TrialCanary {
         int jz0 = Math.max(Math.max(bd[2], bt[2]), -JUDGE_R) + 1;
         int jz1 = Math.min(Math.min(bd[3], bt[3]), JUDGE_R) - 1;
         int changed = 0;
+        int known = 0;
+        java.util.TreeMap<String, Integer> knownBy = new java.util.TreeMap<>();
         String first = "?";
         List<String> detail = new ArrayList<>();
         int at = 0;
@@ -366,7 +410,15 @@ public final class TrialCanary {
                         continue;
                     }
                     changed++;
-                    if (changed == 1) {
+                    // Q-1(1): classify, do not suppress. The known bucket keeps its COUNT (and the
+                    // block+property that produced it) so an always-on signal stops drowning a new
+                    // one — same failure shape as bot_r1_proximity firing 100% of ticks.
+                    if (region == Region.RING && isKnownNeighbourDrift(a[at], b[at])) {
+                        known++;
+                        knownBy.merge(driftKey(a[at], b[at]), 1, Integer::sum);
+                        continue;
+                    }
+                    if (changed - known == 1) {
                         first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
                     }
                     if (detail.size() < DETAIL_CAP) {
@@ -379,9 +431,40 @@ public final class TrialCanary {
         if (changed == 0) {
             return "";
         }
-        return (region == Region.JUDGED ? "coreBlocks changed:" : "outerBlocks changed:")
-                + changed + " first" + first
-                + " states{" + String.join(" ; ", detail)
-                + (changed > detail.size() ? " ; +" + (changed - detail.size()) + " more" : "") + "}";
+        int reported = changed - known;
+        StringBuilder out = new StringBuilder();
+        if (known > 0) {
+            out.append("[KNOWN:neighbour-derived] changed:").append(known).append(' ')
+                    .append(knownBy);
+        }
+        if (reported > 0) {
+            if (out.length() > 0) {
+                out.append(" | ");
+            }
+            out.append(region == Region.JUDGED ? "coreBlocks changed:" : "[RING1] outerBlocks changed:")
+                    .append(reported).append(" first").append(first)
+                    .append(" states{").append(String.join(" ; ", detail))
+                    .append(reported > detail.size() ? " ; +" + (reported - detail.size()) + " more" : "")
+                    .append('}');
+        }
+        return out.toString();
+    }
+
+    /** e.g. {@code minecraft:oak_leaves[distance]} — what drifted, not how many times. */
+    private static String driftKey(int idA, int idB) {
+        try {
+            var a = Block.stateById(idA);
+            var b = Block.stateById(idB);
+            List<String> props = new ArrayList<>();
+            for (var prop : a.getProperties()) {
+                if (!java.util.Objects.equals(a.getValue(prop), b.getValue(prop))) {
+                    props.add(prop.getName());
+                }
+            }
+            return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(a.getBlock())
+                    .toString() + props;
+        } catch (RuntimeException e) {
+            return "?";
+        }
     }
 }

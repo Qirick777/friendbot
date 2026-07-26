@@ -84,6 +84,15 @@ public class BotRule1ActionTest implements BotTest {
         return RUN + 60;
     }
 
+    /** Q-7: P-6 자동 생성이 이름을 삼항연산으로 만드는 클래스를 통째로 건너뛰었다. 그 구멍을 메운다. */
+    @Override
+    public String scenarioSpec() {
+        return "6.3 규칙1(카이팅 가부) 행동 판정. 봇 최대체력 200, bot.setInvulnerable(true), "
+                + "표적 좀비 setInvulnerable(true) — 어느 쪽도 죽지 않아야 판정 창이 끝까지 유지된다. "
+                + "유저 없음(TestUser.spawn 미호출) → Perception.java:131이 봇 외 플레이어를 찾지 못해 user==null "
+                + "→ BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성.";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

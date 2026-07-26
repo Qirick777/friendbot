@@ -70,6 +70,14 @@ public class BotProtectArmedTest implements BotTest {
         return RUN + 60;
     }
 
+    /** Q-7: P-6 자동 생성이 이름을 삼항연산으로 만드는 클래스를 통째로 건너뛰었다. 그 구멍을 메운다. */
+    @Override
+    public String scenarioSpec() {
+        return "9장 유저 보호. 봇 최대체력 20, bot.setInvulnerable(true) — 판정 대상은 교전 결과가 아니라 "
+                + "대상 선택이다. 유저는 invulnerable·최대체력 20, 위협 좀비는 최대체력 400(창 안에 죽지 않도록). "
+                + "TestUser 있음 → 16장 자율 이동이 마지막 else에서 돌 수 있다. idleCommandedTicks로 값 확인.";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

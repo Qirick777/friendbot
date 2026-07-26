@@ -89,6 +89,7 @@ public final class BotTestRegistry {
         register("bot_death", BotDeathTest::new);
         register("bot_persist_save", BotPersistSaveTest::new);
         register("bot_persist_load", BotPersistLoadTest::new);
+        register("bot_persist_none", BotPersistLoadTest.NoRecord::new);
         // T2.1 movement executor.
         register("bot_move_flat", BotMoveFlatTest::new);
         register("bot_move_stair", BotMoveStairTest::new);
@@ -191,6 +192,7 @@ public final class BotTestRegistry {
         register("bot_kite_approach", BotKiteApproachTest::new);
         register("bot_window_variance", BotWindowVarianceTest::new);
         register("bot_warden_live_speed", BotWardenLiveSpeedTest::new);
+        register("bot_warden_live_unpin", BotWardenLiveSpeedTest.Unpinned::new);
         register("bot_warden_pursuit", BotWardenPursuitTest::new);
         register("bot_warden_tactics", BotWardenTacticsTest.Warden::new);
         register("bot_warden_noname", BotWardenTacticsTest.NoName::new);

@@ -78,6 +78,15 @@ public class BotRule2ActionTest implements BotTest {
         return RUN + 60;
     }
 
+    /** Q-7: P-6 자동 생성이 이름을 삼항연산으로 만드는 클래스를 통째로 건너뛰었다. 그 구멍을 메운다. */
+    @Override
+    public String scenarioSpec() {
+        return "6.3 규칙2(근접 허용) 행동 판정. 봇 최대체력 20, bot.setInvulnerable(true) — 주석대로 "
+                + "판정 대상은 접근 결정이지 전투 결과가 아니다. 유저는 invulnerable·최대체력 20. "
+                + "표적 좀비의 최대체력이 팔을 가른다: deny 팔 400(이길 수 없는 상대), allow 팔 20. "
+                + "TestUser 있음 → 16장 자율 이동이 마지막 else에서 돌 수 있다. idleCommandedTicks로 값 확인.";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

@@ -92,6 +92,12 @@ public class BotProtectInterveneTest implements BotTest {
         return 260;
     }
 
+    /** Q-7: P-1 sweep이 놓친 클래스. 시공 범위를 선언해 판정 코어를 그 안으로 넣는다. */
+    @Override
+    public int[] builtBounds() {
+        return new int[]{-18, 26, -4, 4};
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();
