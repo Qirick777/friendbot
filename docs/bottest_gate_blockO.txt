@@ -1,0 +1,20 @@
+RUN_ID=O20260726T085316Z-9710
+BATCH-BEGIN O20260726T085316Z-9710 count=16
+=== VERDICTS (gated) ===
+GATE name=bot_path_blocked drops=false verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_creeper_wall drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_creeper_lowfuse drops=false verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_path_blocked drops=true verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_creeper_wall drops=true verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_creeper_lowfuse drops=true verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_dodge drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_speed_probe drops=false verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_coldstart_dist drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_coldstart_tail1 drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_coldstart_tail2 drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_coldstart_tail3 drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_rule1_fast drops=false verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_window_variance drops=false verdict=PASS runId=O20260726T085316Z-9710
+GATE name=bot_warden_live_speed drops=false verdict=FAIL runId=O20260726T085316Z-9710
+GATE name=bot_warden_pursuit drops=false verdict=PASS runId=O20260726T085316Z-9710
+BATCH-END O20260726T085316Z-9710
