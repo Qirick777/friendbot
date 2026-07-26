@@ -54,7 +54,8 @@ public final class TrialCanary {
 
     public record Snapshot(int mobs, int items, int projectiles, int otherEntities, int players,
                            int nonAirBlocks, long dayTime, String botState, String userState,
-                           int[] blockIds, int[] guardIds, int[] bounds, long scanNanos) {
+                           int[] blockIds, int[] guardIds, int[] bounds, int[] built,
+                           long scanNanos) {
     }
 
     private TrialCanary() {
@@ -102,6 +103,16 @@ public final class TrialCanary {
 
     public static Snapshot capture(ServerLevel level, BlockPos origin, AICompanionBot bot,
                                    int[] bounds) {
+        return capture(level, origin, bot, bounds, bounds);
+    }
+
+    /**
+     * @param built the footprint the harness actually constructs (P-1). The judged core is the
+     *     intersection of this with the declared box and ±{@link #JUDGE_R}, shrunk one inward.
+     *     Everything the harness did not build is restored and logged but never judged.
+     */
+    public static Snapshot capture(ServerLevel level, BlockPos origin, AICompanionBot bot,
+                                   int[] bounds, int[] built) {
         long t0 = System.nanoTime();
         AABB box = new AABB(origin).inflate(sweepRadius(bounds));
         int mobs = 0;
@@ -155,6 +166,7 @@ public final class TrialCanary {
         }
         return new Snapshot(mobs, items, projectiles, other, players, nonAir, level.getDayTime(),
                 botState, userState + "|types:" + bd, ids, guard, bounds.clone(),
+                built == null ? bounds.clone() : built.clone(),
                 System.nanoTime() - t0);
     }
 
@@ -293,6 +305,21 @@ public final class TrialCanary {
 
     private enum Region { JUDGED, RING }
 
+    /** Human-readable judged core, so an empty one is visible in the log rather than inferred. */
+    public static String judgedCoreDesc(Snapshot s) {
+        int[] bd = s.bounds();
+        int[] bt = s.built() == null ? bd : s.built();
+        int jx0 = Math.max(Math.max(bd[0], bt[0]), -JUDGE_R) + 1;
+        int jx1 = Math.min(Math.min(bd[1], bt[1]), JUDGE_R) - 1;
+        int jz0 = Math.max(Math.max(bd[2], bt[2]), -JUDGE_R) + 1;
+        int jz1 = Math.min(Math.min(bd[3], bt[3]), JUDGE_R) - 1;
+        if (jx0 > jx1 || jz0 > jz1) {
+            return "EMPTY (harness builds nothing in range; blocks are restored and logged, not judged)";
+        }
+        return String.format("x%d..%d z%d..%d (%d cells)", jx0, jx1, jz0, jz1,
+                (jx1 - jx0 + 1) * (jz1 - jz0 + 1) * Y_SPAN);
+    }
+
     /**
      * O-2(1): the canary reported coordinates and palette ids three times and the block's IDENTITY
      * zero times, so the same signature (|Δid| = 4 at three different bases: 276, 296, 412) could
@@ -318,12 +345,15 @@ public final class TrialCanary {
             return "";
         }
         int[] bd = base.bounds();
-        // Judged core: the declared box intersected with +/-JUDGE_R, then shrunk one block inward.
-        // The outermost ring of a harness's own floor is exactly where neighbouring fluid arrives.
-        int jx0 = Math.max(bd[0], -JUDGE_R) + 1;
-        int jx1 = Math.min(bd[1], JUDGE_R) - 1;
-        int jz0 = Math.max(bd[2], -JUDGE_R) + 1;
-        int jz1 = Math.min(bd[3], JUDGE_R) - 1;
+        // Judged core: declared box ∩ BUILT box ∩ +/-JUDGE_R, then shrunk one block inward.
+        // The outermost ring of a harness's own floor is exactly where neighbouring fluid arrives,
+        // and the BUILT term is P-1: judging ground the harness never constructed put world-gen
+        // oak leaves inside the core, whose neighbour-derived `distance` no restore can reproduce.
+        int[] bt = base.built() == null ? bd : base.built();
+        int jx0 = Math.max(Math.max(bd[0], bt[0]), -JUDGE_R) + 1;
+        int jx1 = Math.min(Math.min(bd[1], bt[1]), JUDGE_R) - 1;
+        int jz0 = Math.max(Math.max(bd[2], bt[2]), -JUDGE_R) + 1;
+        int jz1 = Math.min(Math.min(bd[3], bt[3]), JUDGE_R) - 1;
         int changed = 0;
         String first = "?";
         List<String> detail = new ArrayList<>();

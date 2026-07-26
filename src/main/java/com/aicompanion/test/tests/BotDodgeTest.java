@@ -58,9 +58,10 @@ public class BotDodgeTest implements BotTest {
      * 확률도, 비율도, 임계도 문장에 없다. 0.80은 이 하니스가 스스로 정한 수이고 :43의 주석이 그것을
      * 「the spec threshold」라 부른 것은 오라벨(유형 #8)이다.
      *
-     * <p>더 중요한 것은 이 수의 분모다. 설계 문장은 「화살 발사 후 체력 불변」— 화살 단위로도, 트라이얼
-     * 단위로도 읽힌다. 하니스는 트라이얼 단위(4발 전부 빗나감)로 재고 있다. 두 해석은 같은 봇에 대해
-     * 전혀 다른 수를 낸다. 여기서 고르지 않는다 — {@link #aggregateExtra()}가 두 값을 다 싣는다.</p>
+     * <p><b>P-2에서 분모가 정해졌다: 화살이다.</b> 설계서:1496의 측정 예시 「회피: 공격 후 봇 체력
+     * 불변」이 공격 단위 서술이고, 트라이얼 단위(4발 전부 빗나감)는 하니스가 만든 인공 분모다.
+     * 임계 0.80은 유지하되 {@link #aggregateSample()}이 화살 표본을 판정 분모로 넘긴다.
+     * 두 값은 계속 함께 찍힌다 — {@link #aggregateExtra()} 참조.</p>
      */
     @Override
     public double successThreshold() {
@@ -82,6 +83,17 @@ public class BotDodgeTest implements BotTest {
     public void resetAggregate() {
         cumArrows = 0;
         cumHits = 0;
+    }
+
+    /**
+     * P-2 사용자 판정: 분모는 화살이다. 설계서:1496의 「회피: 공격 후 봇 체력 불변」이 공격 단위
+     * 서술이고, 트라이얼 단위는 하니스가 만든 인공 분모다(트라이얼당 화살 수를 바꾸면 봇이 그대로여도
+     * 판정이 바뀐다). 임계는 {@link #successThreshold()} 0.80 그대로, 스크리닝 슬랙도
+     * {@code BotTestManager.SCREENING_SLACK} 그대로 — 바뀌는 것은 분모뿐이다.
+     */
+    @Override
+    public int[] aggregateSample() {
+        return cumArrows > 0 ? new int[]{cumArrows - cumHits, cumArrows} : null;
     }
 
     @Override
@@ -122,6 +134,12 @@ public class BotDodgeTest implements BotTest {
     @Override
     public int timeoutTicks() {
         return 260;
+    }
+
+    /** P-1: 이 하니스가 실제로 시공하는 범위. 판정 코어는 이 상자 안으로만 잡힌다. */
+    @Override
+    public int[] builtBounds() {
+        return new int[]{-6, 18, -16, 16};
     }
 
     @Override

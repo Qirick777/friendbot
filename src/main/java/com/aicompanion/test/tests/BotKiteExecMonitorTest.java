@@ -226,15 +226,24 @@ public class BotKiteExecMonitorTest implements BotTest {
         LOGGER.info("[EXECMON] RESULT startedKiteable={} fired={} ticksToExec={} (ceiling {}) "
                         + "ticksToA={} hpLostUntilExec={}",
                 startedKiteable, execMonitorFired, ticksToExec, EXEC_MAX_TICKS, ticksToA, hpLostUntilExec);
+        // P-5 대가 지표. hp 손실 절대값은 대가를 재지 못한다 — 관측된 15.7 → 23.7(+51%)은 B의
+        // 상태가 아니라 나쁜 상태에 머문 구간 길이에 달려 있었고, 그 길이를 나누지 않으면 수정
+        // 전후를 비교할 수 없다. 아래 둘은 구간 길이로 정규화한 값이며 **판정에는 들어가지 않는다**
+        // (통과 조건은 위 `ok` 그대로). 목적은 T5.6의 B 술어 수정을 재는 기준값 축적이다.
+        double hpPerIntentTick = intentOpenTicks > 0 && hpLostTotal >= 0
+                ? hpLostTotal / intentOpenTicks : -1;
+        double failingRatio = intentOpenTicks > 0
+                ? (double) failingTicksTotal / intentOpenTicks : -1;
         String measured = String.format(
                 "startedKiteable:%b,execMonitorFired:%b,ticksToExec:%d,ceiling:%d,ticksToAFlip:%d,"
                         + "hpLostUntilExec:%.1f,hpLostTotal:%.1f,gapAtFlee:%.2f,gapAtExec:%.2f,"
                         + "gapClosed:%.2f,observedAtFlee:%.4f,intentOpenTicks:%d,maxFailingTicks:%d,"
-                        + "failingTicksTotal:%d,"
+                        + "failingTicksTotal:%d,hpPerIntentTick:%.4f,failingRatio:%.3f,"
                         + "enterLine:%.4f",
                 startedKiteable, execMonitorFired, ticksToExec, EXEC_MAX_TICKS, ticksToA,
                 hpLostUntilExec, hpLostTotal, gapAtFlee, gapAtExec, gapClosed, observedAtFlee,
                 intentOpenTicks, maxFailingTicks, failingTicksTotal,
+                hpPerIntentTick, failingRatio,
                 CombatStats.BOT_SPRINT_SPEED * CombatRules.KITE_ENTER_RATIO);
         String expected = "with A's gate bypassed the bot really enters canKite=true on a target it "
                 + "cannot outrun; signal B must catch it within " + EXEC_MAX_TICKS

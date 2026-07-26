@@ -72,6 +72,34 @@ public interface BotTest {
         return new int[]{-24, 24, -24, 24};
     }
 
+    /**
+     * P-1: the footprint this harness actually CONSTRUCTS, as {minDx, maxDx, minDz, maxDz}.
+     *
+     * <p>Why this is separate from {@link #arenaBounds()}. §4 격리 계약 says the judged region is
+     * 「하니스가 실제로 지은 땅만 판정」, and the two boxes serve different jobs:</p>
+     * <ul>
+     *   <li>{@code arenaBounds} = what gets SCANNED and RESTORED. It must stay wide — bot_catch_fall's
+     *       water sat at dx −24 and restoring that far is what took it from 1/3 to 3/3. Shrinking it
+     *       to the construction box would re-open that defect.</li>
+     *   <li>{@code builtBounds} = what gets JUDGED. Measured cause (O-2): with the two conflated,
+     *       bot_creeper_wall judged dx −7 and dz ±5..7 — world-gen oak leaves it never touches —
+     *       and those leaves' {@code distance} is a neighbour-derived property whose source logs
+     *       may lie outside any restore box. 21 cells drifted by exactly one {@code distance} step
+     *       every trial. The isolation device was judging ground it could not restore.</li>
+     * </ul>
+     *
+     * <p>Default = {@code arenaBounds()}, i.e. today's behaviour for anything that has not declared.
+     * Return {@link #NO_BUILD} when the harness constructs nothing: its judged block region is then
+     * empty and only entity/bot/user state is judged. Drift outside the judged core is not silenced
+     * — the ring-1 log reports it every trial (§4 「판정 안 하고 로깅만」).</p>
+     */
+    default int[] builtBounds() {
+        return arenaBounds();
+    }
+
+    /** A deliberately empty box: min &gt; max on both axes, so no block cell is judged. */
+    int[] NO_BUILD = new int[]{0, -1, 0, -1};
+
     default int repeats() {
         return 1;
     }
@@ -99,6 +127,20 @@ public interface BotTest {
      */
     default String aggregateExtra() {
         return "";
+    }
+
+    /**
+     * P-2: the sample the verdict is judged on, as {successes, n}, when the trial is NOT the right
+     * unit. Return null (default) to judge on trials.
+     *
+     * <p>사용자 판정 (P-2): 설계서 1496행의 측정 예시 「회피: 공격 후 봇 체력 불변」은 **공격 단위**
+     * 서술이다. 트라이얼 단위는 하니스가 만든 인공 분모이고 트라이얼당 화살 수를 바꾸면 판정이
+     * 바뀐다. 분모가 스펙에서 나와야 임계도 스펙에서 나온다.</p>
+     *
+     * <p>{@link #successThreshold()}와 스크리닝 슬랙은 그대로 적용된다 — 바뀌는 것은 분모뿐이다.</p>
+     */
+    default int[] aggregateSample() {
+        return null;
     }
 
     /**

@@ -66,6 +66,12 @@ public class BotKiteBandLatchTest implements BotTest {
         return RUN_TICKS + 40;
     }
 
+    /** P-1: 이 하니스가 실제로 시공하는 범위. 판정 코어는 이 상자 안으로만 잡힌다. */
+    @Override
+    public int[] builtBounds() {
+        return new int[]{-6, 14, -22, 22};
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

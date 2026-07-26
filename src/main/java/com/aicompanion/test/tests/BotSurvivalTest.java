@@ -41,6 +41,12 @@ public class BotSurvivalTest implements BotTest {
         return 400;
     }
 
+    /** P-1: 이 하니스가 실제로 시공하는 범위. 판정 코어는 이 상자 안으로만 잡힌다. */
+    @Override
+    public int[] builtBounds() {
+        return new int[]{-12, ENEMY_DX + 3, -4, 4};
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

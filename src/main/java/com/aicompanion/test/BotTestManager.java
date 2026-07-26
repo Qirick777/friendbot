@@ -139,13 +139,15 @@ public final class BotTestManager {
         }
         LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
                 test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
-                test.repeats(), test.successThreshold());
+                repeatsOf(test), test.successThreshold());
         // 결함 유형 #9: the premises a verdict was measured under, printed with the verdict rather
         // than buried in setup(). Empty means the harness has not stated any — which is itself the
         // finding, so it is logged as "(unstated)" instead of being silently skipped.
         String spec = test.scenarioSpec();
-        LOGGER.info("[BOTTEST] {} runId={} SCENARIO doTileDrops={} | {}", test.name(), RUN_ID,
-                TILE_DROPS, spec == null || spec.isBlank() ? "(unstated)" : spec);
+        LOGGER.info("[BOTTEST] {} runId={} SCENARIO doTileDrops={} repeats={}{} | {}",
+                test.name(), RUN_ID, TILE_DROPS, repeatsOf(test),
+                REPEATS_OVERRIDE > 0 ? "(overridden)" : "",
+                spec == null || spec.isBlank() ? "(unstated)" : spec);
         test.resetAggregate();
         return true;
     }
@@ -175,6 +177,20 @@ public final class BotTestManager {
      */
     public static final boolean TILE_DROPS =
             Boolean.parseBoolean(System.getProperty("bottest.tiledrops", "false"));
+
+    /**
+     * P-1(3): trial-count override for a targeted re-run (`-Dbottest.repeats=10`). 0 = use the
+     * harness's own {@link BotTest#repeats()}. Stamped into the SCENARIO line like TILE_DROPS, so a
+     * verdict measured at an overridden n can never be mistaken for the harness's declared n.
+     */
+    public static final int REPEATS_OVERRIDE =
+            Integer.getInteger("bottest.repeats", 0);
+
+    /** The trial count actually used: the override when set, else the harness's declaration. */
+    private static int repeatsOf(BotTest t) {
+        int declared = Math.max(1, t.repeats());
+        return REPEATS_OVERRIDE > 0 && declared > 1 ? REPEATS_OVERRIDE : declared;
+    }
 
     private static BotTestResult withMoveOwner(BotTestResult r) {
         com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
@@ -234,11 +250,16 @@ public final class BotTestManager {
                 // from the same state, checked with values instead of assumed.
                 TrialCanary.Snapshot now = TrialCanary.capture(
                         ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current(),
-                        active.arenaBounds());
+                        active.arenaBounds(), active.builtBounds());
                 if (baseline == null) {
                     baseline = now;
                     canaryDiff = "";
                     int[] ab = active.arenaBounds();
+                    int[] bt = active.builtBounds();
+                    // P-1: both boxes are printed. A judged core that reads as empty is a fact
+                    // about the harness (it builds nothing), not a silent exemption.
+                    LOGGER.info("[BOTTEST] canary built=x{}..{} z{}..{} judgedCore={}",
+                            bt[0], bt[1], bt[2], bt[3], TrialCanary.judgedCoreDesc(now));
                     LOGGER.info("[BOTTEST] canary baseline arena=x{}..{} z{}..{} scan={} blocks in "
                                     + "{}ms | mobs={} items={} proj={} nonAir={} bot=[{}] user=[{}]",
                             ab[0], ab[1], ab[2], ab[3], now.blockIds().length,
@@ -357,7 +378,7 @@ public final class BotTestManager {
 
     private void finish(BotTestResult r) {
         String name = active.name();
-        int repeats = Math.max(1, active.repeats());
+        int repeats = repeatsOf(active);
 
         if (repeats > 1) {
             trialIndex++;
@@ -385,10 +406,19 @@ public final class BotTestManager {
                     return;
                 }
             }
+            // P-2: some harnesses judge on a sub-trial unit. bot_dodge's trial is 「4발 전부 빗나감」,
+            // an artificial denominator — change arrows-per-trial and the verdict changes without
+            // the bot changing. The spec's unit (설계서:1496 「회피: 공격 후 봇 체력 불변」) is the
+            // attack. When a harness declares that sample, the SAME threshold and the SAME screening
+            // slack are applied to it; only the denominator moves.
+            int[] agg = active.aggregateSample();
+            boolean onAggregate = agg != null && agg.length == 2 && agg[1] > 0;
+            int k = onAggregate ? agg[0] : trialsPassed;
+            int n = onAggregate ? agg[1] : trialIndex;
             double rate = (double) trialsPassed / trialIndex;
             // Judge on the 95% Wilson score lower bound, not the raw rate: landing exactly on the
             // threshold with a handful of trials is sampling luck, not evidence.
-            double lb = wilsonLowerBound(trialsPassed, trialIndex);
+            double lb = wilsonLowerBound(k, n);
             // A threshold of 1.00 is a DETERMINISTIC requirement ("no trial may fail"), not a rate
             // estimate — and no finite-sample Wilson bound ever reaches 1.0, so applying the interval
             // there would fail every such harness forever. Interval judging applies to the
@@ -396,15 +426,15 @@ public final class BotTestManager {
             boolean deterministic = active.successThreshold() >= 1.0 - 1.0E-9;
             double effective = deterministic ? active.successThreshold()
                     : active.successThreshold() - (SCREENING_MODE ? SCREENING_SLACK : 0.0);
-            boolean ok = deterministic ? trialsPassed == trialIndex
+            boolean ok = deterministic ? (onAggregate ? k == n : trialsPassed == trialIndex)
                     : lb >= effective - 1.0E-9;
-            // O-1(3): the sub-event aggregate rides alongside the trial aggregate. Both values are
-            // printed; only the trial one is judged, because which of the two the spec threshold
-            // refers to is not the harness's call.
+            // O-1(3): the sub-event aggregate rides alongside the trial aggregate. BOTH are printed
+            // whichever one is judged, so the discarded denominator stays visible.
             String extra = active.aggregateExtra();
             String measured = String.format(
-                    "trials:%d,passed:%d,successRate:%.2f,wilson95Lower:%.3f,canary:%s%s|%s",
-                    trialIndex, trialsPassed, rate, lb,
+                    "trials:%d,passed:%d,successRate:%.2f,judgedOn:%s,wilson95Lower:%.3f,canary:%s%s|%s",
+                    trialIndex, trialsPassed, rate,
+                    onAggregate ? ("aggregate:" + k + "/" + n) : ("trials:" + k + "/" + n), lb,
                     trialIndex <= 1 ? "n/a"
                             : canaryMismatches == 0 ? "OK" : ("MISMATCH x" + canaryMismatches),
                     extra == null || extra.isBlank() ? "" : "," + extra,
@@ -413,9 +443,10 @@ public final class BotTestManager {
                     ? String.format("all %d trials pass (deterministic requirement) — %s",
                             repeats, r.expected())
                     : String.format(
-                            "95%% Wilson lower bound >= %.2f (%s tier: spec %.2f) over %d trials — %s",
+                            "95%% Wilson lower bound >= %.2f (%s tier: spec %.2f) over %d %s — %s",
                             effective, SCREENING_MODE ? "screening" : "final",
-                            active.successThreshold(), repeats, r.expected());
+                            active.successThreshold(), n,
+                            onAggregate ? "spec-unit samples" : "trials", r.expected());
             r = new BotTestResult(ok, measured, expected);
         }
 
