@@ -247,6 +247,11 @@ public class BotProtection {
     // --- actions ---
 
     private void assignTarget(AICompanionBot bot, LivingEntity target, boolean useMelee) {
+        // ch.14: 「교전 모드가 무기를 요청하면(근접→검, 원거리→활) 해당 카테고리 최고를 메인핸드로
+        // 스왑」. The equipment manager had the swap but no requester, so choosing ranged mode left a
+        // sword in hand and the bot shot nothing (measured in bot_protect_armed: mode ENGAGE_RANGED
+        // with a bow in the inventory and threatHpDrop 0.0).
+        bot.equipment().requestCategory(bot, !useMelee, target);
         if (useMelee) {
             bot.rangedCombat().stop();
             if (bot.meleeCombat().target() != target) {

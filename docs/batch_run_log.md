@@ -125,3 +125,33 @@ scenarioSpec. **사유**: 세션 내에서 검증까지 마칠 수 있는 한계
    판정 없이 지나갔다.
 → **규칙 추가**: `runlong3.sh`가 서버 JVM을 정확히 죽이는 것과 별개로, **대기 명령이 남아 있는
    동안 새 배치를 띄우지 않는다.**
+
+## 블록 A' — 유저 보호 회귀 복구 (목표 1)
+
+[결정] 규칙2는 「개입 여부」가 아니라 「전술 선택」에만 적용한다. 원거리 수단이 있으면 원거리로
+내리고, 없으면 그대로 근접한다. **잠정 — 최종 조율은 T5.6의 「계층 간 우선순위 충돌 해소」.**
+
+| 하니스 | 이전 | 이후 |
+|---|---|---|
+| `bot_protect_intervene` | FAIL 0/3, `aggroDrop:0.0, mode:ENGAGE_RANGED` | **PASS 3/3, canary OK** |
+| `bot_protect_priority` | FAIL 0/3 | **PASS 3/3, canary OK** |
+| `bot_protect_armed` (신규) | — | **PASS** `mode:ENGAGE_RANGED, threatHpDrop:78.7` |
+| `bot_protect_unarmed` (신규) | — | **PASS** `mode:ENGAGE_MELEE, threatHpDrop:88.6` |
+
+**중간 발견 — 유형 #10 재발, 이번엔 내가 만든 것.** `bot_protect_armed`가 최초 FAIL
+(`threatHpDrop:0.0`)이었다. 원인은 14장의 「교전 모드가 무기를 요청하면 해당 카테고리 최고를
+메인핸드로 스왑」을 `BotEquipment.requestCategory`로 구현해놓고 **호출자를 만들지 않은 것**이다.
+활은 인벤에, 검은 손에 있었다. `BotProtection.assignTarget`에서 요청하도록 배선해 해소.
+블록 B에서 규칙 셋의 판정-행동 단절을 잡아놓고, 블록 C 구현에서 같은 유형을 새로 만들었다.
+
+## 블록 A'' — 배선 범위와 잠복 결함
+
+- **A''1** 교전 대상 배정 호출부 전수: 실전 경로는 `BotProtection` 하나(규칙2 통과). 우회는
+  `BotCommand`의 `/bot attack`(개발자 수동 명령)과 하니스 12곳뿐. **이전 부채 기술을 좁힌다** —
+  「규칙2가 실제 전투 경로 전부를 게이트하지 않는다」가 아니라 「수동 명령과 하니스만 우회한다」.
+- **A''2** 관측 기반 판정 하니스 11종 스윕: 판정 시점 60틱 미만은 `BotWardenTacticsTest`(40) 하나뿐,
+  이미 80으로 수정·재실행해 3종 PASS 복귀. 나머지는 140~420틱. **잠복은 일반화되지 않았다.**
+- **A''3** `bot_rule1_kite`에 결과 측정 추가. `retreatCommandTicks:43` + `gapAtFirstRetreat:0.56`
+  이후 간격 증가를 판정에 포함. 의도만 재는 것은 유형 #10의 축소판이다.
+- **A''4** `nearestEnemyHasAxe`가 사거리 내 **모든** 적을 검사하도록 수정(이전엔 최근접 하나,
+  값 69/220틱). `bot_rule4_axe` `nearestHasAxeTicks:220`으로 확인.
