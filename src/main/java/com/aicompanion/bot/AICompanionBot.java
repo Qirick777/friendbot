@@ -44,6 +44,51 @@ public class AICompanionBot extends ServerPlayer {
     /** T5.5 자원 조달 — ch.17 던져준 것 수락·드롭 줍기. Sets a fetch goal; the planner executes it. */
     private final com.aicompanion.bot.living.BotPickup pickup =
             new com.aicompanion.bot.living.BotPickup();
+
+    /**
+     * 유형 #12 / L-4 instrumentation: which layer owned MOVEMENT this tick.
+     *
+     * <p>Every branch of the chain below is mutually exclusive, so exactly one owner is recorded per
+     * tick. This turns "does 16장 이동 run in this harness?" from an argument into a measured value —
+     * which is the whole point of 유형 #12: the premise 「봇은 가만히 있다」 used to be implicit, and
+     * when T5.4 made the bot move on its own it silently changed what several harnesses measured.</p>
+     */
+    public enum MoveOwner { REFLEX, CREEPER, RESCUE, SURVIVAL, MELEE, RANGED, PICKUP, IDLE }
+
+    private final int[] moveOwnerTicks = new int[MoveOwner.values().length];
+    private MoveOwner lastMoveOwner = MoveOwner.IDLE;
+
+    public int moveOwnerTicks(MoveOwner o) {
+        return moveOwnerTicks[o.ordinal()];
+    }
+
+    public MoveOwner lastMoveOwner() {
+        return lastMoveOwner;
+    }
+
+    public void resetMoveOwnerCounters() {
+        java.util.Arrays.fill(moveOwnerTicks, 0);
+    }
+
+    /** Compact histogram for the verdict line, e.g. "IDLE:180,MELEE:60". Zero buckets omitted. */
+    public String moveOwnerHistogram() {
+        StringBuilder sb = new StringBuilder();
+        for (MoveOwner o : MoveOwner.values()) {
+            int n = moveOwnerTicks[o.ordinal()];
+            if (n > 0) {
+                if (sb.length() > 0) {
+                    sb.append('/');
+                }
+                sb.append(o.name()).append(':').append(n);
+            }
+        }
+        return sb.length() == 0 ? "none" : sb.toString();
+    }
+
+    private void noteMoveOwner(MoveOwner o) {
+        lastMoveOwner = o;
+        moveOwnerTicks[o.ordinal()]++;
+    }
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
@@ -183,18 +228,24 @@ public class AICompanionBot extends ServerPlayer {
 
         if (evading) {
             // reflex.tickR1 already drove movement (shield up / sidestep).
+            noteMoveOwner(MoveOwner.REFLEX);
         } else if (creeperActing) {
             // environment.tickCreeperDefense already drove movement (wall + step / shield + flee).
+            noteMoveOwner(MoveOwner.CREEPER);
         } else if (rescuing) {
             // rescue.tick already drove movement (approach / mount / sprint-away).
+            noteMoveOwner(MoveOwner.RESCUE);
         } else if (survivalActive) {
             // survival.tick already drove movement inputs / item use / pearl throw.
+            noteMoveOwner(MoveOwner.SURVIVAL);
         } else if (meleeCombat.hasTarget()) {
             // Melee combat (T3.3) drives movement inputs directly (no A*/mover).
+            noteMoveOwner(MoveOwner.MELEE);
             meleeCombat.tick(this);
         } else if (rangedCombat.hasTarget()) {
             // Ranged combat (T3.4) owns aim (yaw/pitch) and movement inputs directly, and fires
             // the arrow here (before the physics tick) so shootFromRotation reads the aim it wrote.
+            noteMoveOwner(MoveOwner.RANGED);
             rangedCombat.tick(this);
         } else {
             // 평상시 (T5.4 / ch.16): nothing above claimed the tick, so this is the idle state.
@@ -202,8 +253,11 @@ public class AICompanionBot extends ServerPlayer {
             // 「걸어서 따라옴 … 텔레포트 안 함」 holds without any special case.
             // 17장 자원 조달 first: a gift the user threw outranks 배회 (and only 배회 — combat,
             // survival and rescue all claimed the tick before this branch was reached).
-            if (!pickup.tick(this)) {
+            if (pickup.tick(this)) {
+                noteMoveOwner(MoveOwner.PICKUP);
+            } else {
                 idle.tick(this);
+                noteMoveOwner(MoveOwner.IDLE);
             }
             // Strategic layer: A* planner picks the next node → sets the movement target.
             planner.tick(this);

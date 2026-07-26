@@ -149,6 +149,25 @@ public final class BotTestManager {
         return true;
     }
 
+    /**
+     * 유형 #12 판정 규약: every verdict carries the movement-owner histogram, so 「봇이 스스로
+     * 움직였는가」 is never an implicit premise again. IDLE:n in the histogram means 16장 평상시
+     * 이동이 n틱 동안 봇을 몰았다는 뜻이다.
+     */
+    private static BotTestResult withMoveOwner(BotTestResult r) {
+        com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
+        if (bot == null) {
+            return r;
+        }
+        String extra = ",moveOwner:" + bot.moveOwnerHistogram()
+                + ",idleOwnedTicks:" + bot.moveOwnerTicks(
+                        com.aicompanion.bot.AICompanionBot.MoveOwner.IDLE)
+                + ",pickupOwnedTicks:" + bot.moveOwnerTicks(
+                        com.aicompanion.bot.AICompanionBot.MoveOwner.PICKUP);
+        return r.pass() ? BotTestResult.pass(r.measured() + extra, r.expected())
+                : BotTestResult.fail(r.measured() + extra, r.expected());
+    }
+
     /** Called every server tick (END phase). */
     public synchronized void serverTick(MinecraftServer server) {
         if (active == null) {
@@ -178,6 +197,12 @@ public final class BotTestManager {
                 active.setup(ctx);
                 setupDone = true;
                 ctx.elapsedTicks = 0;
+                // 유형 #12: the movement-owner histogram must describe the OBSERVATION WINDOW, not
+                // setup. Reset here, read at judge time.
+                com.aicompanion.bot.AICompanionBot mob0 = com.aicompanion.bot.BotManager.current();
+                if (mob0 != null) {
+                    mob0.resetMoveOwnerCounters();
+                }
                 // Isolation contract. Trial 1 defines the baseline; every later trial must start
                 // from the same state, checked with values instead of assumed.
                 TrialCanary.Snapshot now = TrialCanary.capture(
@@ -220,7 +245,7 @@ public final class BotTestManager {
             }
             ctx.elapsedTicks++;
             if (active.tick(ctx)) {
-                finish(active.judge(ctx));
+                finish(withMoveOwner(active.judge(ctx)));
                 return;
             }
             if (ctx.elapsedTicks >= active.timeoutTicks()) {

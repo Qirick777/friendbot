@@ -506,3 +506,42 @@ protect_ranged(2팔), rule2(2팔), rule_dcell. **전부 재실행했다(37종 �
 | `bot_creeper_lowfuse` | `passed:1/3, canary:MISMATCH x2 (coreBlocks changed, id 296↔300)` | **격리 계약 위반.** 트라이얼 간 블록 상태가 복원되지 않는다. 원인 미확정 — `doTileDrops=false` 도입과 시점이 겹치므로 그것부터 의심한다 |
 
 **「변경 없음」으로 결론 낸 항목 없음** — 19종 전부 실제로 재실행했다.
+
+# 블록 L — 계측 정합
+
+RUN_ID 도입 이전 기록은 신선도 미확정이다. 과거 기록을 재해석하지 않는다.
+
+## L-1 유형 #12 등록 + 봇 정지 전제 전수 sweep
+
+설계서 추가: `AI_Bot_Design.md:1644` 「정정 8 — 결함 유형 #12」(29줄),
+`:1673` 「정정 9 — scenarioSpec 규약」(25줄). R.2 절, 추가만. 총 54줄. 문서 1698줄.
+
+**분류를 논증이 아니라 측정으로 바꿨다.** `AICompanionBot.MoveOwner` 열거형과
+`noteMoveOwner()`를 틱 사슬 각 분기에 심고, `BotTestManager.withMoveOwner()`가 **모든** 판정
+라인에 `moveOwner:.../idleOwnedTicks:n`을 덧붙인다. 이제 「이 하니스에서 16장 이동이 돌았는가」는
+판정 라인에서 읽힌다.
+
+- [I] 46 클래스 — `TestUser.spawn` 없음 → `BotIdle.java:74-75`에서 즉시 반환. 미도달이 코드 근거.
+- [II] 19 클래스 33팔 — 전부 재실행. 값은 `docs/bot_motion_sweep.md` §3.
+- [III] 4 — rule2_deny, rule_dcell, pickup_natural, pickup_gift(PASS이나 근거가 검증 대상과 다름).
+
+**결과: 29 PASS, 4 FAIL.**
+
+### 계측이 블록 K의 내 가설을 반증했다
+
+`bot_rule2_deny`: `moveOwner:MELEE:200, idleOwnedTicks:0`. **16장 이동은 한 틱도 돌지 않았다.**
+블록 K에서 「16장 배회가 봇을 대상 쪽으로 밀어 넣은 것이 가장 유력」이라고 쓴 것은 틀렸다.
+접근(`botApproachSum:15.42`)과 타격(`damageDealt:88.6`)은 근접 컨트롤러가 직접 만든 것이므로
+이 건은 **유형 #12가 아니라 유형 #10**이다 — `allowMelee:false`를 근접 컨트롤러가 읽지 않는다.
+
+`bot_rule_dcell`: `MELEE:173/IDLE:67`, `dCellTicks:196`인데 `lateralCommandTicks:1`.
+L-4(2)의 물음에 대한 답 — **횡이동 명령이 사실상 발행되지 않는다(196틱 중 1틱).**
+따라서 원인은 이동 소유권 밖이다.
+
+`bot_pickup_natural`: `idleOwnedTicks:200` — 유일하게 순수한 유형 #12.
+
+    [INVALIDATES] bot_creeper_wall  (블록 K PASS -> 지금 1/3, canary MISMATCH x2, id 276->280)
+
+`bot_creeper_lowfuse`는 반대로 K의 FAIL에서 PASS 3/3 canary OK로 돌아왔다. 두 하니스가 서로
+반대로 뒤집혔다 — **비결정성**이며 어느 쪽도 단독으로는 증거가 아니다. L-5의 단일 변수 확인
+(doTileDrops 되돌린 팔)은 미실행.
