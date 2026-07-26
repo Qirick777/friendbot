@@ -104,6 +104,10 @@ public class Perception {
             if (p.getOwner() == bot) {
                 continue;
             }
+            // 6.2 「원거리 여부 | 투사체 발사 관측」: a projectile in the world IS the observation, and
+            // it counts whether or not this particular one is heading at us — the fact learned is
+            // "that mob shoots", not "that shot was aimed here".
+            ObservedRanged.observe(p);
             if (isHeadingToward(p, botPos)) {
                 incoming.add(p);
             }

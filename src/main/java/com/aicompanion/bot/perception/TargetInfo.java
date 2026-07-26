@@ -22,6 +22,8 @@ public class TargetInfo {
     public final double knockbackResist;
 
     public final boolean isRanged;
+    /** 6.2's own source: this mob's type has actually been SEEN firing a projectile. */
+    public final boolean observedRanged;
     public final boolean armorPiercing; // layer-2 data (T4.6): supplied by Layer2Registry, not by name
     public final double hitboxWidth;
     public final double hitboxHeight;
@@ -61,7 +63,13 @@ public class TargetInfo {
                 com.aicompanion.bot.combat.Layer2Registry.profileOf(entity);
         this.layer2Profile = layer2;
 
-        this.isRanged = entity instanceof RangedAttackMob || layer2.rangedRangeXZ > 0.0;
+        // 6.2 「원거리 여부 | 투사체 발사 관측」. The observation is the source of truth; the interface
+        // survives only as 6.2(a)'s cold-start prior (assuming a mob might shoot is the safe error),
+        // and layer-2 supplies the unmeasurable hitscan/AoE ranges. Consumers that need the OBSERVED
+        // fact specifically — R1's evade trigger — must read observedRanged, not this union.
+        this.observedRanged = ObservedRanged.hasFired(entity);
+        this.isRanged = this.observedRanged
+                || entity instanceof RangedAttackMob || layer2.rangedRangeXZ > 0.0;
         this.armorPiercing = layer2.armorPiercing;
         this.hitboxWidth = entity.getBbWidth();
         this.hitboxHeight = entity.getBbHeight();

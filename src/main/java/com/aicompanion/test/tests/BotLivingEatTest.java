@@ -62,6 +62,17 @@ public class BotLivingEatTest implements BotTest {
     }
 
     @Override
+    public String scenarioSpec() {
+        return String.format(
+                "bot food forced to %d (below threshold %d), 20hp, invulnerable; bag holds rotten "
+                + "flesh(4.8, dangerous) + golden apple(13.6) + cooked beef(20.8); %s",
+                START_FOOD, com.aicompanion.bot.living.BotLiving.HUNGER_THRESHOLD,
+                fighting ? "a 200hp NoAi zombie is held as the melee target for the whole window "
+                        + "so 15.1's suppression clause is the thing under test"
+                        : "no enemy — the safe case");
+    }
+
+    @Override
     public String name() {
         return fighting ? "bot_live_eat_combat" : "bot_live_eat";
     }

@@ -54,6 +54,16 @@ public class BotAbilityPathTest implements BotTest {
     }
 
     @Override
+    public String scenarioSpec() {
+        return String.format(
+                "plateau with a %d-block cliff (> maxSafeFall %d, lethal on foot) between the bot "
+                + "and the goal, AND a walkable staircase detour at the far z end — the detour has "
+                + "to exist or \"took the cliff\" would be forced rather than chosen; the two arms "
+                + "share the arena and differ ONLY in whether a water bucket is in the bag (%b)",
+                CLIFF_DROP, com.aicompanion.bot.BotPathfinder.MAX_SAFE_FALL_PUBLIC, withBucket);
+    }
+
+    @Override
     public String name() {
         return withBucket ? "bot_path_ability_water" : "bot_path_ability_detour";
     }

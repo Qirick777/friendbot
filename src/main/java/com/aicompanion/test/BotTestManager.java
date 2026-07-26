@@ -134,6 +134,12 @@ public final class BotTestManager {
         LOGGER.info("[BOTTEST] {} START origin={} timeout={}t difficulty={} repeats={} threshold={}",
                 test.name(), origin, test.timeoutTicks(), STANDARD_DIFFICULTY,
                 test.repeats(), test.successThreshold());
+        // 결함 유형 #9: the premises a verdict was measured under, printed with the verdict rather
+        // than buried in setup(). Empty means the harness has not stated any — which is itself the
+        // finding, so it is logged as "(unstated)" instead of being silently skipped.
+        String spec = test.scenarioSpec();
+        LOGGER.info("[BOTTEST] {} SCENARIO {}", test.name(),
+                spec == null || spec.isBlank() ? "(unstated)" : spec);
         return true;
     }
 
@@ -163,7 +169,8 @@ public final class BotTestManager {
                 // Building an arena over natural terrain drops item entities on the first trial and
                 // over flat stone on none of the others. That debris is a by-product of construction,
                 // not harness state, so it is swept before the snapshot on every trial alike.
-                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin, active.arenaBounds());
+                TrialCanary.sweepConstructionDebris(ctx.level, ctx.origin, active.arenaBounds(),
+                        active.itemsAreSubject());
                 TrialCanary.Snapshot now = TrialCanary.capture(
                         ctx.level, ctx.origin, com.aicompanion.bot.BotManager.current(),
                         active.arenaBounds());

@@ -76,9 +76,24 @@ public final class TrialCanary {
      * {@code bot_creeper_wall}. The repair mechanism was manufacturing the leak it exists to remove.
      */
     public static void sweepConstructionDebris(ServerLevel level, BlockPos origin, int[] bounds) {
+        sweepConstructionDebris(level, origin, bounds, false);
+    }
+
+    /**
+     * @param itemsAreSubject when true, item entities are NOT swept and are excluded from the
+     *     canary comparison. Needed by tests whose subject IS an item on the ground (ch.17 자원
+     *     조달): the sweep runs after {@code setup()}, so it deleted the very stack the test had
+     *     just placed — measured as {@code itemEntityGone:true, fetchTicks:0} with the canary
+     *     baseline reporting {@code items=0}. The exemption is declared per test, not global, so
+     *     every other harness keeps the strict contract.
+     */
+    public static void sweepConstructionDebris(ServerLevel level, BlockPos origin, int[] bounds,
+                                               boolean itemsAreSubject) {
         AABB box = new AABB(origin).inflate(sweepRadius(bounds));
-        for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
-            e.discard();
+        if (!itemsAreSubject) {
+            for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, box)) {
+                e.discard();
+            }
         }
         for (FallingBlockEntity e : level.getEntitiesOfClass(FallingBlockEntity.class, box)) {
             e.discard();

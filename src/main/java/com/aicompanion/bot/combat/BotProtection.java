@@ -40,9 +40,22 @@ public class BotProtection {
     public enum Mode { NONE, FOLLOW, ENGAGE_MELEE, ENGAGE_RANGED, HEAL_USER, FLEE }
 
     private Mode mode = Mode.NONE;
+    /** 9.2 diagnostics: which branch of the priority table fired, and what it picked. */
+    private String lastRule = "none";
+    @Nullable
+    private net.minecraft.world.entity.LivingEntity lastChosen;
 
     public Mode mode() {
         return mode;
+    }
+
+    public String lastRule() {
+        return lastRule;
+    }
+
+    @Nullable
+    public net.minecraft.world.entity.LivingEntity lastChosen() {
+        return lastChosen;
     }
 
     /** Called from {@link AICompanionBot#tick()} below reflex/survival, above combat. */
@@ -59,10 +72,17 @@ public class BotProtection {
         // --- 9.1 intervention filter + 9.4 invade radius + 9.3-3 ignore non-aggroed ranged ---
         List<TargetInfo> engage = engageable(p, user);
         if (engage.isEmpty()) {
-            // U1: no unnecessary preemptive attack — just stay with the user.
-            follow(bot, user);
+            // U1: no unnecessary preemptive attack. Peacetime movement now belongs to ch.16
+            // (T5.4 BotIdle), so this branch must NOT set a goal of its own — it only stands down.
+            //
+            // It used to call follow(user) here, which made two layers write the planner goal in
+            // the same tick: protection set it to the user's block, then the idle branch set it to
+            // a wander target. Every setGoal with a different goal discards the search, so the A*
+            // never completed and the bot stood still. Measured: bot_idle_wander botTravel 0.00,
+            // maxStep 0.000 over 260 ticks, while bot_idle_follow passed — because there the two
+            // layers happened to want the same destination and setGoal was a no-op.
+            clearCombat(bot);
             mode = Mode.NONE;
-            LOGGER.info("[PROTECT] no engage target -> follow user (no preemptive attack)");
             return;
         }
 
@@ -164,6 +184,8 @@ public class BotProtection {
             bot.rangedCombat().setDistanceCritical(false);
         }
 
+        lastRule = rule;
+        lastChosen = chosen.entity;
         assignTarget(bot, chosen.entity, useMelee);
         mode = useMelee ? Mode.ENGAGE_MELEE : Mode.ENGAGE_RANGED;
         LOGGER.info("[PROTECT] {} -> target={} dps={} targetsUser={} mode={} userHp={}",

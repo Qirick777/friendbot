@@ -69,6 +69,16 @@ public class BotCatchMeetTest implements BotTest {
     }
 
     @Override
+    public String scenarioSpec() {
+        return String.format(
+                "fall %d blocks (≈%d ticks) onto stone; bot %s the descent line, user 20hp and "
+                + "vulnerable; C4 admission is meetDist/MEET_SPEED(0.20) < ticksToLand, and the "
+                + "height is what makes the meet arm reachable at all",
+                FALL_HEIGHT, 48, meetable ? "6 blocks off (inside MEET_RANGE 24)"
+                        : "30 blocks off (outside MEET_RANGE 24, bucket held)");
+    }
+
+    @Override
     public String name() {
         return meetable ? "bot_catch_meet" : "bot_catch_water";
     }

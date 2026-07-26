@@ -53,6 +53,11 @@ public class BotIdleTest implements BotTest {
     private int sprintTicks;
     private int followTicks;
     private Vec3 prevPos = Vec3.ZERO;
+    /** First tick the bot got inside 3 blocks — 「유저 3블록 근처서 정지」 is measured from HERE. */
+    private int arriveTick = -1;
+    private double arriveDist = -1;
+    private double postArrivalSpeed;
+    private double maxDistAfterArrival;
 
     public enum Mode { FOLLOW, HUNGRY, WANDER }
 
@@ -63,6 +68,17 @@ public class BotIdleTest implements BotTest {
     @Override
     public int[] arenaBounds() {
         return new int[]{-26, 26, -26, 26};
+    }
+
+    @Override
+    public String scenarioSpec() {
+        return String.format(
+                "flat 44×44 stone arena, user stationary and invulnerable at %d blocks, bot food "
+                + "%d (%s), no enemies at all — the idle branch is the only thing that can move "
+                + "the bot; teleport ceiling %.1f b/tick",
+                mode == Mode.WANDER ? 2 : START_DIST,
+                mode == Mode.HUNGRY ? com.aicompanion.bot.living.BotLiving.SPRINT_MIN_FOOD : 20,
+                mode == Mode.HUNGRY ? "sprint impossible" : "sprint allowed", TELEPORT_STEP);
     }
 
     @Override
@@ -124,6 +140,10 @@ public class BotIdleTest implements BotTest {
         minDist = finalDist;
         maxDist = finalDist;
         endSpeed = 0;
+        arriveTick = -1;
+        arriveDist = -1;
+        postArrivalSpeed = 0;
+        maxDistAfterArrival = 0;
         maxStep = 0;
         botTravel = 0;
         sprintTicks = 0;
@@ -159,19 +179,36 @@ public class BotIdleTest implements BotTest {
         if (ctx.elapsedTicks >= RUN - 20) {
             endSpeed = Math.max(endSpeed, step);
         }
+        // 「유저 3블록 근처서 정지, 다시 배회」 — the stop is at ARRIVAL, and wandering afterwards is
+        // what the spec asks for. Measuring the speed at t=RUN instead judged the 배회 that ch.16
+        // requires as a failure to stop (measured: finalDist 6.43, endSpeed 0.0056 — a bot doing
+        // exactly what the sentence says). So the stop window is anchored to the arrival tick.
+        if (arriveTick < 0 && d <= BotIdle.FOLLOW_EXIT) {
+            arriveTick = ctx.elapsedTicks;
+            arriveDist = d;
+        }
+        if (arriveTick >= 0) {
+            maxDistAfterArrival = Math.max(maxDistAfterArrival, d);
+            if (ctx.elapsedTicks > arriveTick && ctx.elapsedTicks <= arriveTick + 20) {
+                postArrivalSpeed = Math.max(postArrivalSpeed, step);
+            }
+        }
         return ctx.elapsedTicks >= RUN;
     }
 
     @Override
     public BotTestResult judge(BotTestContext ctx) {
         boolean noTeleport = maxStep < TELEPORT_STEP;
-        boolean converged = finalDist <= BotIdle.FOLLOW_EXIT + 1.5;
-        boolean stopped = endSpeed < 0.02;
+        boolean converged = arriveTick >= 0;
+        boolean stopped = converged && postArrivalSpeed < 0.02;
+        // After the stop the bot goes back to 배회, which ch.16 bounds at 8 blocks around the user.
+        boolean stayedNear = maxDistAfterArrival <= BotIdle.WANDER_RADIUS + 2.0;
 
         boolean ok = switch (mode) {
-            case FOLLOW -> converged && stopped && noTeleport && followTicks > 0;
+            case FOLLOW -> converged && stopped && stayedNear && noTeleport && followTicks > 0;
             // 「스프린트 불가 … 걸어서 따라옴(느려도) … 텔레포트 안 함」
-            case HUNGRY -> converged && noTeleport && sprintTicks == 0 && followTicks > 0;
+            case HUNGRY -> converged && stayedNear && noTeleport && sprintTicks == 0
+                    && followTicks > 0;
             // 「유저 정지 → 주변 배회」: never enters FOLLOW, stays in the 8-block radius, and moves.
             case WANDER -> followTicks == 0 && maxDist <= BotIdle.WANDER_RADIUS + 2.0
                     && botTravel > 4.0 && noTeleport;
@@ -182,17 +219,19 @@ public class BotIdleTest implements BotTest {
                 String.format("%.2f", maxDist), String.format("%.2f", botTravel), sprintTicks,
                 followTicks, String.format("%.3f", maxStep));
         String measured = String.format(
-                "arm:%s,finalDist:%.2f,minDist:%.2f,maxDist:%.2f,endSpeed:%.4f,botTravel:%.2f,"
+                "arm:%s,arriveTick:%d,arriveDist:%.2f,postArrivalSpeed:%.4f,maxDistAfterArrival:%.2f,"
+                        + "finalDist:%.2f,minDist:%.2f,maxDist:%.2f,endSpeed:%.4f,botTravel:%.2f,"
                         + "sprintTicks:%d,followTicks:%d,maxStep:%.3f,food:%d,enter:%.0f,exit:%.0f",
-                mode.name().toLowerCase(), finalDist, minDist, maxDist, endSpeed, botTravel,
+                mode.name().toLowerCase(), arriveTick, arriveDist, postArrivalSpeed,
+                maxDistAfterArrival, finalDist, minDist, maxDist, endSpeed, botTravel,
                 sprintTicks, followTicks, maxStep,
                 BotManager.current() == null ? -1 : BotManager.current().getFoodData().getFoodLevel(),
                 BotIdle.FOLLOW_ENTER, BotIdle.FOLLOW_EXIT);
         String expected = switch (mode) {
-            case FOLLOW -> "user 16 blocks away → bot follows and settles at ≈3 blocks, then stops "
-                    + "(endSpeed≈0)";
-            case HUNGRY -> "food 6 (sprint impossible) → still converges to ≈3, sprintTicks 0, and "
-                    + "no single tick exceeds a walk (no teleport)";
+            case FOLLOW -> "user 16 blocks away → bot follows, reaches ≈3 blocks and STOPS THERE "
+                    + "(speed≈0 for the 20 ticks after arrival), then resumes 배회 inside 8 blocks";
+            case HUNGRY -> "food 6 (sprint impossible) → still reaches ≈3, sprintTicks 0, and no "
+                    + "single tick exceeds a walk (no teleport)";
             case WANDER -> "user 2 blocks away and stationary → never enters FOLLOW, stays inside "
                     + "the 8-block wander radius, and still moves (어슬렁, not frozen)";
         };

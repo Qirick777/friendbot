@@ -6,6 +6,7 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.AxeItem;
@@ -39,6 +40,22 @@ public class BotReflex {
     private boolean placedTotem;          // we put a totem in the off-hand (for proc detection)
     private final int orbitSign = 1;      // consistent circle-strafe direction → no zero-velocity flips
     private boolean chargeEscaping;       // T4.6: currently fleeing a charged-up special attack
+    /** Diagnostics for the R1 trigger harness: what fired, and whether R1 owned the tick. */
+    private boolean r1Fired;
+    private boolean r1HadAttackMotion;
+    private boolean r1HadIncoming;
+
+    public boolean r1Fired() {
+        return r1Fired;
+    }
+
+    public boolean r1HadAttackMotion() {
+        return r1HadAttackMotion;
+    }
+
+    public boolean r1HadIncoming() {
+        return r1HadIncoming;
+    }
 
     // --- R0: totem pre-equip (never blocks the other layers) ---
 
@@ -119,10 +136,22 @@ public class BotReflex {
 
     public boolean tickR1(AICompanionBot bot) {
         Projectile incoming = firstIncoming(bot);
-        Entity rangedEnemy = nearestRangedEnemy(bot);
-        if (incoming == null && rangedEnemy == null) {
-            return false; // no ranged threat → let the lower layers run
+        // 설계 7 R1 조건: 「적 공격 모션 or 투사체가 봇 히트박스로 향함」. What was here instead was
+        // 「투사체 접근 OR 원거리적(RangedAttackMob)이 근처」 — neither half of which is the spec's
+        // second term. It fired on mere PROXIMITY to a class of mob, so a skeleton standing still at
+        // 10 blocks kept R1 owning the tick, and it never fired on a melee mob winding up, which is
+        // the case the shield exists for. Both halves are now the sentence:
+        //   attackMotion  = an enemy in its attack swing, inside its own reach (적 공격 모션)
+        //   incoming      = a projectile actually heading at the hitbox (unchanged)
+        LivingEntity attacker = attackMotion(bot);
+        Entity rangedEnemy = observedShooter(bot);
+        r1HadAttackMotion = attacker != null;
+        r1HadIncoming = incoming != null;
+        if (incoming == null && attacker == null) {
+            r1Fired = false;
+            return false; // no attack motion and nothing inbound → let the lower layers run
         }
+        r1Fired = true;
 
         boolean shieldInOff = bot.getOffhandItem().getItem() == Items.SHIELD;
         boolean axeEnemy = nearestEnemyHasAxe(bot);
@@ -134,9 +163,12 @@ public class BotReflex {
         // would drop whichever knowledge the other holds; the axe term in particular is not in
         // rule 4. Moving the axe knowledge into Layer2Profile is registered as separate debt.
         boolean ruleShield = ruleAllowsShield(bot, incoming);
-        if (incoming != null && shieldInOff && !axeEnemy && ruleShield) {
+        // 「적 공격 모션 or 투사체 … 방패 보유 → 방패 즉시 올림」: the shield answers BOTH halves of the
+        // condition. Gating it on `incoming != null` alone meant a mob winding up a melee swing —
+        // the textbook case for a shield — never raised it.
+        if ((incoming != null || attacker != null) && shieldInOff && !axeEnemy && ruleShield) {
             // R1 shield: face the threat and raise the shield (off-hand use).
-            Vec3 src = incoming.position();
+            Vec3 src = incoming != null ? incoming.position() : attacker.position();
             float faceYaw = yawTo(bot.getX(), bot.getZ(), src.x, src.z);
             bot.setYRot(faceYaw);
             bot.setYBodyRot(faceYaw);
@@ -162,10 +194,14 @@ public class BotReflex {
         if (rangedEnemy != null) {
             px = rangedEnemy.getX();
             pz = rangedEnemy.getZ();
-        } else {
+        } else if (incoming != null) {
             Vec3 v = incoming.getDeltaMovement();
             px = bot.getX() + v.x; // a point along the arrow's flight → orbit its bearing
             pz = bot.getZ() + v.z;
+        } else {
+            // Melee wind-up with no shield: orbit the swinger itself (수직 방향 사이드스텝).
+            px = attacker.getX();
+            pz = attacker.getZ();
         }
         double dx = px - bot.getX();
         double dz = pz - bot.getZ();
@@ -227,11 +263,41 @@ public class BotReflex {
         return nearest == null || CombatRules.useShield(nearest);
     }
 
+    /**
+     * 「적 공격 모션」 — the nearest live enemy that is mid-swing and close enough for that swing to
+     * land. {@code LivingEntity.swinging} is the vanilla attack animation flag: it is the motion,
+     * observed, and it is what ch.7 names. A swing from outside the attacker's own reach is not a
+     * threat to react to, so the distance term is the attacker's reach, not a fixed radius.
+     */
     @Nullable
-    private static Entity nearestRangedEnemy(AICompanionBot bot) {
+    private static LivingEntity attackMotion(AICompanionBot bot) {
+        LivingEntity best = null;
+        double bestD = Double.MAX_VALUE;
+        for (TargetInfo t : bot.perception().targets) {
+            if (t.entity == null || !t.entity.isAlive() || !t.entity.swinging) {
+                continue;
+            }
+            if (t.distance <= t.reach + 1.0 && t.distance < bestD) {
+                bestD = t.distance;
+                best = t.entity;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * A pivot for the circle-strafe: an enemy that has actually been OBSERVED firing (6.2 「원거리
+     * 여부 | 투사체 발사 관측」). This used to be {@code instanceof RangedAttackMob} — a class the bot
+     * cannot see. It is deliberately NOT {@code TargetInfo.isRanged} either: since T4.6 that flag
+     * also covers hitscan/AoE layer-2 ranges (a warden's sonic boom), and orbiting such a mob is
+     * useless — it can only be outranged, which is the tactical band's job. Orbiting is for dodging
+     * real projectiles, so the test is "has this thing been seen shooting".
+     */
+    @Nullable
+    private static Entity observedShooter(AICompanionBot bot) {
         for (TargetInfo t : bot.perception().targets) {
             if (t.entity != null && t.entity.isAlive() && t.distance <= RANGED_EVADE_DIST
-                    && t.entity instanceof net.minecraft.world.entity.monster.RangedAttackMob) {
+                    && t.observedRanged) {
                 return t.entity;
             }
         }

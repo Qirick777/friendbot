@@ -105,20 +105,29 @@ public class BotIdle {
             return;
         }
 
-        // WANDER: 유저 중심 8블록 안을 어슬렁.
+        // WANDER: 유저 중심 8블록 안을 어슬렁. The pause belongs AFTER a hop, not after choosing one:
+        // the first version set a goal and set pause in the same breath, so the very next tick took
+        // the pause branch and called planner.stop() on the goal it had just set. Measured result —
+        // bot_idle_wander botTravel:0.00 over 260 ticks. Same shape as defect #10: a decision was
+        // made and then cancelled before anything executed it.
         if (pause > 0) {
             pause--;
-            bot.planner().stop();
             bot.mover().stop();
             return;
         }
-        if (wanderGoal == null || bot.planner().arrived() || bot.planner().isUnreachable()
-                || bot.blockPosition().distSqr(wanderGoal) <= 2.0) {
+        if (wanderGoal == null) {
             wanderGoal = pickWanderGoal(bot, user);
-            pause = WANDER_PAUSE;
             if (wanderGoal != null) {
                 bot.planner().setGoal(wanderGoal);
             }
+            return;
+        }
+        if (bot.planner().arrived() || bot.planner().isUnreachable()
+                || bot.blockPosition().distSqr(wanderGoal) <= 2.0) {
+            wanderGoal = null;          // hop done → stand a moment, then pick the next one
+            pause = WANDER_PAUSE;
+            bot.planner().stop();
+            bot.mover().stop();
             return;
         }
         bot.planner().setGoal(wanderGoal);

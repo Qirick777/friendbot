@@ -42,6 +42,32 @@ public interface BotTest {
      * it and logs anything that changed there, so an under-declared box shows up the same way the
      * under-sized default did.</p>
      */
+    /**
+     * True when item entities on the ground are this test's SUBJECT (ch.17 자원 조달), so the trial
+     * canary must neither sweep them after setup nor count them as drift. Default false: for every
+     * other harness a stray item in the arena is debris and the strict contract stands.
+     */
+    /**
+     * The scenario's PREMISES, in the harness's own words: the numbers {@code setup()} chose and
+     * why they are the right ones for the claim being tested. Logged at START and carried in the
+     * verdict line.
+     *
+     * <p>Why it exists: 결함 유형 #9 (시나리오 전제 미기록). A verdict is only as good as the world it
+     * was measured in, and several premises in this suite are visible only by reading setup() —
+     * a 2000 hp dummy, a 4000 hp bot, a 400 hp bot. Those numbers make a measurement mean something
+     * different from what its name says, and nothing in the output showed them.</p>
+     *
+     * <p>Default empty: the manager then logs only what the canary can observe for itself. An
+     * override should state what the canary cannot see — the intent behind the numbers.</p>
+     */
+    default String scenarioSpec() {
+        return "";
+    }
+
+    default boolean itemsAreSubject() {
+        return false;
+    }
+
     default int[] arenaBounds() {
         return new int[]{-24, 24, -24, 24};
     }

@@ -16,6 +16,7 @@ import com.aicompanion.test.tests.BotDeathTest;
 import com.aicompanion.test.tests.BotDodgeTest;
 import com.aicompanion.test.tests.BotFallNoWaterTest;
 import com.aicompanion.test.tests.BotFallWaterTest;
+import com.aicompanion.test.tests.BotHealTest;
 import com.aicompanion.test.tests.BotIdleTest;
 import com.aicompanion.test.tests.BotLivingEatTest;
 import com.aicompanion.test.tests.BotLivingSleepTest;
@@ -28,9 +29,13 @@ import com.aicompanion.test.tests.BotPathReachTest;
 import com.aicompanion.test.tests.BotPerceptionTest;
 import com.aicompanion.test.tests.BotPearlTest;
 import com.aicompanion.test.tests.BotPhase2ComboTest;
+import com.aicompanion.test.tests.BotPickupTest;
 import com.aicompanion.test.tests.BotProtectArmedTest;
 import com.aicompanion.test.tests.BotProtectInterveneTest;
+import com.aicompanion.test.tests.BotProtectLowUserTest;
 import com.aicompanion.test.tests.BotProtectPriorityTest;
+import com.aicompanion.test.tests.BotProtectRangedTest;
+import com.aicompanion.test.tests.BotR1TriggerTest;
 import com.aicompanion.test.tests.BotRangedTest;
 import com.aicompanion.test.tests.BotRule1FastTest;
 import com.aicompanion.test.tests.BotRule1ActionTest;
@@ -150,6 +155,23 @@ public final class BotTestRegistry {
         register("bot_idle_follow", BotIdleTest.Follow::new);
         register("bot_idle_follow_hungry", BotIdleTest.Hungry::new);
         register("bot_idle_wander", BotIdleTest.Wander::new);
+        // R1 트리거 정정 (7장 「적 공격 모션 or 투사체」 + 6.2 「투사체 발사 관측」).
+        register("bot_r1_swing", BotR1TriggerTest.Swing::new);
+        register("bot_r1_idle", BotR1TriggerTest.Idle::new);
+        register("bot_r1_proximity", BotR1TriggerTest.Proximity::new);
+        // T5.5 자원 조달 (던진 것 수락·드롭 줍기).
+        register("bot_pickup_gift", BotPickupTest.Gift::new);
+        register("bot_pickup_combat", BotPickupTest.Combat::new);
+        register("bot_pickup_natural", BotPickupTest.Natural::new);
+        // 9.2 타겟 우선순위 밴드 · 9.3 원거리 대응 · 8/9.2 회복 경로 (부채 회수).
+        register("bot_protect_lowuser", BotProtectLowUserTest.Low::new);
+        register("bot_protect_highuser", BotProtectLowUserTest.High::new);
+        register("bot_protect_ranged_guard", BotProtectRangedTest.Guard::new);
+        register("bot_protect_ranged_melee", BotProtectRangedTest.MeleeFirst::new);
+        register("bot_survival_heal", BotHealTest.SelfHeal::new);
+        register("bot_survival_nopotion", BotHealTest.SelfNone::new);
+        register("bot_rescue_heal", BotHealTest.UserHeal::new);
+        register("bot_rescue_nopotion", BotHealTest.UserNone::new);
         // T5.1 능력 인식 A*.
         register("bot_path_ability_water", BotAbilityPathTest.Water::new);
         register("bot_path_ability_detour", BotAbilityPathTest.Detour::new);

@@ -41,6 +41,9 @@ public class AICompanionBot extends ServerPlayer {
     /** T5.4 기본 상태 — ch.16 배회·추종. Chooses the idle goal; the planner/mover execute it. */
     private final com.aicompanion.bot.living.BotIdle idle =
             new com.aicompanion.bot.living.BotIdle();
+    /** T5.5 자원 조달 — ch.17 던져준 것 수락·드롭 줍기. Sets a fetch goal; the planner executes it. */
+    private final com.aicompanion.bot.living.BotPickup pickup =
+            new com.aicompanion.bot.living.BotPickup();
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
@@ -89,6 +92,11 @@ public class AICompanionBot extends ServerPlayer {
     /** 기본 상태 (T5.4 / ch.16). */
     public com.aicompanion.bot.living.BotIdle idle() {
         return idle;
+    }
+
+    /** 자원 조달 (T5.5 / ch.17). */
+    public com.aicompanion.bot.living.BotPickup pickup() {
+        return pickup;
     }
 
     public com.aicompanion.bot.combat.BotReflex reflex() {
@@ -192,7 +200,11 @@ public class AICompanionBot extends ServerPlayer {
             // 평상시 (T5.4 / ch.16): nothing above claimed the tick, so this is the idle state.
             // It only chooses the goal — the planner and mover below carry it out, which is why
             // 「걸어서 따라옴 … 텔레포트 안 함」 holds without any special case.
-            idle.tick(this);
+            // 17장 자원 조달 first: a gift the user threw outranks 배회 (and only 배회 — combat,
+            // survival and rescue all claimed the tick before this branch was reached).
+            if (!pickup.tick(this)) {
+                idle.tick(this);
+            }
             // Strategic layer: A* planner picks the next node → sets the movement target.
             planner.tick(this);
             // Action layer: set movement inputs before the physics tick consumes them.

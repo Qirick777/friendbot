@@ -42,6 +42,15 @@ public class BotCatchNoneTest implements BotTest {
     private boolean waterLaid;     // observed: did C5 fire anyway?
 
     @Override
+    public String scenarioSpec() {
+        return String.format(
+                "driven %d-block fall, user vulnerable; bot 28 blocks away horizontally AND holding "
+                + "no water — so C2/C3 (CATCH_XZ 2.5), C4 (MEET_RANGE %.0f) and C5 (needs a bucket) "
+                + "are each refused by their own condition, not by a broken path",
+                DROP, com.aicompanion.bot.combat.BotRescue.MEET_RANGE);
+    }
+
+    @Override
     public String name() {
         return "bot_catch_none";
     }

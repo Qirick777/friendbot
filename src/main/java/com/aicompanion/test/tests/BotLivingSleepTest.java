@@ -64,6 +64,16 @@ public class BotLivingSleepTest implements BotTest {
     }
 
     @Override
+    public String scenarioSpec() {
+        return String.format(
+                "night (daytime 18000 — Player.tick wakes any sleeper at dawn, so a day run would "
+                + "measure vanilla, not this feature); user asleep in its own bed marked OCCUPIED; "
+                + "%s; bot 20hp food20, wake issued at tick %d",
+                freeBedAvailable ? "one FREE bed 3 blocks away" : "NO free bed in range",
+                SLEEP_WINDOW);
+    }
+
+    @Override
     public String name() {
         return freeBedAvailable ? "bot_live_sleep" : "bot_live_sleep_nobed";
     }
