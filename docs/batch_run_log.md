@@ -341,3 +341,15 @@ C4 분기(A* 목표 설정 + 스프린트 + 기존 startRiding 팔로 인계), C
 4. **스프린트는 즉시 멈추지 않는다.** 도착 +1틱부터 재면 `postArrivalSpeed 0.1514` — 0.28
    스프린트가 바닐라 마찰로 감속하는 값이다. 창을 +10~+30으로 옮겼다. **행동이 아니라 물리를
    재고 있었다.**
+
+### T5.4 최종 (정지 판정 창 정정 후)
+
+| 하니스 | 결과 |
+|---|---|
+| `bot_idle_follow` | **PASS** `arriveTick:57, arriveDist:2.86, postArrivalSpeed[+10..+30]:0.0000, maxDistAfterArrival:4.04, botTravel:27.22, sprintTicks:57, maxStep:0.280` |
+| `bot_idle_follow_hungry` | **PASS** `arriveTick:71, postArrivalSpeed:0.0000, sprintTicks:0, maxStep:0.216, botTravel:27.28` |
+| `bot_idle_wander` (반대) | **PASS** `followTicks:0, maxDist:6.80, botTravel:25.25, maxStep:0.266` |
+
+두 추종 팔의 차이는 **스프린트 틱뿐**(57 대 0)이고 최대 한 틱 이동이 0.280 대 0.216으로
+갈린다 — 「걸어서 따라옴(느려도)」이 값으로 나타난 자리다. 어느 팔에서도 한 틱에 1블록을
+넘지 않았다(「텔레포트 안 함」).
