@@ -1,0 +1,24 @@
+RUN_ID=P20260726T110441Z-9778
+TREE-BEGIN 2536ca9fbea51774a437a56e13da22dd5885c32b:da39a3ee5e6b4b0d3255bfef95601890afd80709:28e533eea2a74e1e37a9aeb09134e6cf77b141f0
+BATCH-BEGIN P20260726T110441Z-9778 count=15
+PAIR-BEGIN bot_persist_save -> (reboot, same world) -> bot_persist_load
+PAIR-END bot_persist_save+bot_persist_load
+TREE-END 2536ca9fbea51774a437a56e13da22dd5885c32b:da39a3ee5e6b4b0d3255bfef95601890afd80709:28e533eea2a74e1e37a9aeb09134e6cf77b141f0
+=== VERDICTS (gated: name AND N AND RUN_ID AND NOT-DIRTY) ===
+GATE name=bot_persist_save verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_persist_load verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_persist_none verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_warden_live_unpin verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_kite_execmon verdict=FAIL runId=P20260726T110441Z-9778
+GATE name=bot_creeper_wall verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_kite_band_latch verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_kite_recover verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_kite_execmon_lat verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_kite_approach verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_warden_band verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_warden_charge verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_warden_probe verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_rule1_fast verdict=PASS runId=P20260726T110441Z-9778
+GATE name=bot_rule_dcell verdict=FAIL runId=P20260726T110441Z-9778
+GATE name=bot_survival verdict=PASS runId=P20260726T110441Z-9778
+BATCH-END P20260726T110441Z-9778

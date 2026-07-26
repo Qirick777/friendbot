@@ -275,6 +275,8 @@ public final class TrialCanary {
         int[] eb = expand(base.bounds());
         int[] inner = base.bounds();
         int changed = 0;
+        int known = 0;
+        java.util.TreeMap<String, Integer> knownBy = new java.util.TreeMap<>();
         String first = "?";
         List<String> detail = new ArrayList<>();
         int at = 0;
@@ -287,7 +289,15 @@ public final class TrialCanary {
                         continue;
                     }
                     changed++;
-                    if (changed == 1) {
+                    // Q-1(1): ring 2 gets the same classification as ring 1. Measured (블록 Q):
+                    // warden_probe printed 561 identical birch_leaves[distance] cells every trial —
+                    // an always-on signal in the ring whose whole job is to flag the unexpected.
+                    if (isKnownNeighbourDrift(a[at], b[at])) {
+                        known++;
+                        knownBy.merge(driftKey(a[at], b[at]), 1, Integer::sum);
+                        continue;
+                    }
+                    if (changed - known == 1) {
                         first = String.format("(%+d,%+d,%+d) id %d->%d", dx, dy, dz, a[at], b[at]);
                     }
                     if (detail.size() < DETAIL_CAP) {
@@ -297,10 +307,25 @@ public final class TrialCanary {
                 }
             }
         }
-        return changed == 0 ? ""
-                : "beyondDeclared changed:" + changed + " first" + first
-                        + " states{" + String.join(" ; ", detail) + "}"
-                        + " (declaration may be too small)";
+        if (changed == 0) {
+            return "";
+        }
+        int reported = changed - known;
+        StringBuilder out = new StringBuilder();
+        if (known > 0) {
+            out.append("[KNOWN:neighbour-derived] beyondDeclared changed:").append(known)
+                    .append(' ').append(knownBy);
+        }
+        if (reported > 0) {
+            if (out.length() > 0) {
+                out.append(" | ");
+            }
+            out.append("[RING2] beyondDeclared changed:").append(reported).append(" first")
+                    .append(first).append(" states{").append(String.join(" ; ", detail))
+                    .append(reported > detail.size() ? " ; +" + (reported - detail.size()) + " more" : "")
+                    .append("} (declaration may be too small)");
+        }
+        return out.toString();
     }
 
     private enum Region { JUDGED, RING }

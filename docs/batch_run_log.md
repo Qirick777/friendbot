@@ -1232,3 +1232,242 @@ failingRatio:0.519, gapAtFlee:1.49`.
 9개 클래스(kite 계열, rule4, rule_dcell, equip)에서 자동 생성기가 기본값 200/1을 적어 넣었다.
 그것은 없는 전제를 지어내는 것이므로 「관측 창과 트라이얼 수는 리터럴이 아니라 상수 계산식이다」로
 바꿨다. **게이트 7의 분모는 58이다.**
+
+# 블록 Q — 진단 마감
+
+GPG 재서명 금지 — 사용자 지시 + 트리 지문 충돌. 재요청은 이 항목 참조.
+
+배치 RUN_ID `P20260726T110441Z-9778`, 15 실행. 게이트 4조건 통과
+(`TREE-BEGIN == TREE-END = 2536ca9…:da39a3ee…:28e533ee…`). 전문 `docs/bottest_gate_blockQ.txt`.
+
+## Q-0 DIRTY 발화 확인 — 게이트를 믿기 전에 게이트가 작동하는 것을 봤다
+
+### Q-0(2) 세 성분 각각 — 하나만 걸려도 지문이 바뀐다
+
+지문은 `HEAD : sha1(git status --porcelain) : sha1(git ls-files -s -- src/** build.gradle)`.
+세 성분을 하나씩만 건드려 값으로 확인했다(각 시험 후 원상복구, BASE == RESTORED 확인).
+
+    BASE      90c66ad1…:da39a3ee…:789c821a…
+    성분1 HEAD  534bf2b1…:da39a3ee…:789c821a…   ← 빈 커밋 1개. 2·3 성분 동일
+    성분2 워킹  90c66ad1…:a76d7ed0…:789c821a…   ← 추적 안 되는 임시 파일 1개. 1·3 성분 동일
+    성분3 인덱스 90c66ad1…:e2ae30c2…:a4504ab4…  ← src 파일 스테이징. 2도 함께 바뀜(정상)
+    RESTORED  90c66ad1…:da39a3ee…:789c821a…   ← BASE와 동일
+
+성분 1과 2는 **단독으로** 분리 확인됐다. 성분 3은 스테이징이 워킹트리 상태도 바꾸므로 2와 함께
+움직인다 — 이는 git의 성질이지 지문의 결함이 아니며, 어느 쪽이 걸려도 DIRTY가 뜬다.
+
+### Q-0(1)(3) 배치 중 편집 → BATCH-DIRTY, 그리고 DIRTY는 PASS가 아니다
+
+폐기용 1-실행 배치(`dummy`)를 돌리는 중 25초 시점에 저장소 루트에 임시 파일 하나를 만들었다.
+
+    TREE-BEGIN 90c66ad1…:da39a3ee95…:789c821a…
+    TREE-END   90c66ad1…:6e0844f95…:789c821a…      ← 성분 2만 변함
+    BATCH-DIRTY the source tree changed during this batch; every verdict below is DIRTY
+    GATE name=dummy verdict=DIRTY rawVerdict=PASS runId=P20260726T105554Z-3062 TREE-DIRTY(begin=… end=…)
+
+**`rawVerdict=PASS`인데 `verdict=DIRTY`다.** 하니스는 실제로 통과했고 게이트가 그것을 PASS로
+집계하기를 거부했다 — Q-0(3)이 요구한 값이다. 확인 후 임시 파일을 지웠고 porcelain은 다시 깨끗하다.
+
+## Q-1 경고 링 분류 — 억제가 아니라 분류
+
+### Q-1(1)(3) 판별식
+
+`TrialCanary.isKnownNeighbourDrift(idA, idB)`: **블록 종류 동일 AND 바뀐 속성이 전부 이웃 파생
+목록 안**일 때만 [KNOWN]이다. 목록(코드에 명시, 이것이 판별식의 전부):
+
+    distance                          잎·비계 — 가장 가까운 원목/지지대까지의 거리
+    north east south west up down     울타리·유리판·담장·덩굴·레드스톤 연결
+    shape                             계단·레일 — 이웃에서 도출되는 모서리 형태
+    waterlogged                       이웃에서 흘러든 유체
+
+**목록에 없는 속성이 하나라도 바뀌면 [RING1]/[RING2]로 전량 출력된다.** 판별식이 좁을수록
+안전하다 — 모르는 것은 전부 출력 쪽으로 떨어진다. [KNOWN] 부류도 개수와
+`{minecraft:oak_leaves[distance]=764}` 형태의 블록·속성 집계는 남긴다.
+
+첫 구현은 링1(judged/ring)에만 걸었고 링2(선언 밖)를 빠뜨렸다. 블록 Q 값이 그 구멍을 드러냈다 —
+`bot_warden_probe`가 561칸을 **매 트라이얼 전량 출력**하고 있었다. 링2에도 같은 분류를 적용했다.
+
+### Q-1(2) 증가하는가 — 아니다. 정상 상태다
+
+이번 배치의 월드는 매 배치 새로 생성되므로 블록 P의 월드와 다르고, 선언 상자(±24) 안에는
+잎이 없어 **링1은 10 트라이얼 전부 0**이었다. 같은 현상이 링2(±36)에서 나타났고, 거기서
+트라이얼별 개수를 셌다:
+
+    bot_creeper_wall  트라이얼 2..10:  30, 28, 28, 28, 28, 28, 28, 28, 28
+    bot_path_blocked  트라이얼 2..10:  56, 56, 56, 56, 56, 56, 56, 56, 56
+    bot_warden_probe  트라이얼 2..10:  561 × 9 (전부 동일)
+
+**증가하지 않는다.** creeper_wall의 30 → 28 한 번은 첫 트라이얼 폭발 잔여가 가라앉은 것이고
+이후 평평하다. 나머지 둘은 완전 상수다. 즉 `restore()`는 이 표류에 대해 **멱등**이며,
+월드가 누적 열화하지 않는다. 멈추고 보고할 사유는 없다.
+
+부수 확인: 링2의 첫 칸이 `minecraft:birch_leaves[distance=…]`, id 308→304 — **|Δ|=4가 다른
+수종에서도 그대로다.** 정정 14의 산술이 참나무 한 종의 우연이 아님을 보여준다.
+
+## Q-2 회피 확정 게이트 — 이월 목표를 값으로 고정
+
+사용자 산술을 받는다. §9(B) 이월 항목 서술을 이렇게 바꾼다:
+
+    (이전) T5.6 확정 게이트 이월 — 0.80 도달 필요
+    (지금) T5.6 확정 게이트 이월 — p̂ 0.840 필요, 현재 0.815, 격차 +2.5pp (400발 기준 +10발)
+
+설계서 R.2에 「정정 16 — 확정 게이트 임계의 실질 요구값」으로 등록했고, 일반 규약
+「Wilson 하한 임계는 점추정 임계보다 높은 실성능을 요구한다. 이월 목표는 하한이 아니라
+필요 점추정으로 기록한다」를 함께 적었다. 회피 로직은 건드리지 않았다.
+
+## Q-3 warden_live_speed — 가설 확인. 그러나 회귀는 설명되지 않았다
+
+시험 팔 `bot_warden_live_unpin`: `pinBot()` 훅(기본 true)만 두고 기존 하니스 동작은 그대로,
+서브클래스에서 고정만 해제했다. 다른 변수는 하나도 건드리지 않았다.
+
+    bot_warden_live_speed (고정)   t1/t2/t3  observedSpeed 0.0000 / 0.0000 / 0.0000  FAIL 0/3
+    bot_warden_live_unpin (해제)   t1/t2/t3  observedSpeed 0.2562 / 0.2231 / 0.2658  PASS 3/3
+                                             speedObserved:true, canKite:true, canary:OK
+
+**워든이 움직인다. 가설이 확인됐다** — 완전히 정지한 대상에게는 워든이 접근하지 않는다.
+그리고 t3의 **0.2658은 설계서:866이 「실동 하니스 최악값」으로 적은 값과 정확히 같다.**
+
+**그러나 이것이 회귀를 설명하지는 않는다.** 고정 코드는 파일 최초 커밋 `a4f2bdf`부터
+지금까지 **한 글자도 바뀌지 않았고**(`git show a4f2bdf:…`로 확인), §6의 0.2658/0.2658/0.2236은
+바로 그 커밋의 실행이 생산한 값이다. 즉 **고정된 봇이 예전에는 추격당했고 지금은 아니다.**
+고정 해제가 증상을 없앤다는 것과, 무엇이 바뀌어 고정 상태가 더는 통하지 않는지는 다른 물음이다.
+후자는 열려 있다. 다음 팔은 고정된 봇의 **틱당 실제 변위**를 계측하는 것이다 — 예전에 미세하게
+움직였다면 그것이 진동원이었을 수 있다. 부채 (A). 고치지 않았다.
+
+### Q-3(2) 원장 서술 정정 — 앵커는 둘이고 하나는 재검증 불가였다
+
+블록 O에서 나는 「§6의 워든 실동 속도 상수 자체는 무효가 아니다 — 다른 두 하니스가 독립 재현」이라
+썼다. **절반만 맞았다.** 설계서:866은 마진을 **두 앵커**로 적는다:
+
+    W60 평균 0.2640        → 마진 5.92%
+    실동 하니스 최악값 0.2658 → 마진 5.27%
+
+`bot_warden_pursuit`(이동 표적 0.2784)와 `bot_speed_probe`(단발 최고 0.2798)가 재현한 것은
+**다른 양**이다. 0.2658은 `bot_warden_live_speed`가 생산하던 값이고, 그 하니스가 죽은 동안
+**두 번째 앵커는 재검증 불가 상태였다.** 워든 마진이 나이프에지인 만큼 이것은 정확해야 한다.
+지금은 `bot_warden_live_unpin` t3가 0.2658을 냈으므로 **두 번째 앵커에 값이 다시 생겼다** —
+다만 전제가 다른 팔(고정 해제)에서 나온 값이라는 단서를 붙여 기록한다. 설계서는 고치지 않았다.
+
+## Q-4 bot_persist_load 수리 — 앞절이 처음으로 값을 가졌다
+
+러너에 `a+b` 2부팅 쌍 문법을 넣었다: 쌍 앞에서 world를 한 번만 지우고, `a` 실행 → 서버 재시작 →
+`b`를 **같은 world**에서 실행한다. 쌍 단위 격리는 유지된다(다음 spec 앞에서 다시 지운다).
+
+    PAIR-BEGIN bot_persist_save -> (reboot, same world) -> bot_persist_load
+    bot_persist_save  PASS  exists:true,saved:true,botExists:true,uuid:c40b4e54-5cf9-33de-bc69-a435d5c9462d
+    bot_persist_load  PASS  restored:true,uuidMatch:true,uuid:c40b4e54-5cf9-33de-bc69-a435d5c9462d
+    bot_persist_none  PASS  botExists:false,botPresent:false
+
+**설계서:1265 T1.2 검증 3(「리로드 후 봇 엔티티 존재 AND UUID 일치」)이 처음으로 값을 갖는다.**
+O-3(3)에 적은 원장 정정 「T1.2 검증 3(복원)은 통과 기록 없이 완료로 적혀 있었다」는
+이제 「없었고, 블록 Q에서 생겼다」로 닫힌다. 앞절이 PASS이므로 Q-4(3)의 세 갈래 재분할은 불필요하다.
+
+뒷절은 별개 하니스 `bot_persist_none`으로 분리했다 — 하나가 두 절을 반대 방향으로 물으면
+배치 조건에 따라 반드시 한쪽이 FAIL로 찍힌다(O-3(2)에서 관측한 그대로).
+두 하니스의 scenarioSpec에 「2부팅 쌍의 앞쪽/뒤쪽/바깥」을 명시했다(Q-4(4)).
+
+### Q-4(5) T6.3과의 연결
+
+`bot_persist_load`의 복원 검증은 1차 보완 설계서 **T6.3(파괴 델타 P1, ownerUUID 마이그레이션)**의
+선행조건이다. 마이그레이션은 「기존 저장 데이터를 새 스키마로 읽어 들이는가」를 묻는데, 복원 경로
+자체가 검증돼 있지 않으면 마이그레이션 실패와 복원 실패를 구분할 통로가 없다.
+지금 복원이 값으로 PASS이므로 T6.3의 검증 통로가 열렸다.
+
+### 부수 발견 — 판정 라인의 한글이 로그에서 깨진다
+
+`bot_persist_none`의 expected가 로그에 `(???:1260 ??)`로 찍혔다. 서버 JVM이
+`-Dfile.encoding=US-ASCII`로 뜨기 때문이며, 이미 `[BOT] restore skipped ? no bot recorded`에서도
+같은 일이 있었다. 판정에는 영향이 없으나 **expected/measured 문자열에는 한글을 쓰지 않는 것이
+안전하다**. 부채 (A).
+
+## Q-5 execmon 정규화 — 해소가 아니었다. n=3이 그것을 보여준다
+
+원장 서술을 고친다: **정규화 값도 +40%였고, n=1씩이었으므로 판정 불가였다.**
+
+n=3 실측(RUN_ID P20260726T110441Z-9778, 전 트라이얼 `execMonitorFired:false`):
+
+    t1  hpLostTotal 11.7  intentOpenTicks 222  hpPerIntentTick 0.0526  failingRatio 0.491
+    t2  hpLostTotal 26.0  intentOpenTicks 160  hpPerIntentTick 0.1625  failingRatio 0.513
+    t3  hpLostTotal 30.0  intentOpenTicks 221  hpPerIntentTick 0.1357  failingRatio 0.484
+
+    hpPerIntentTick  평균 0.1170  sd 0.0573  cv 49%   (최대/최소 = 3.1배)
+    failingRatio     평균 0.496   sd 0.0151  cv 3.0%
+
+**두 지표의 성질이 정반대다.** `failingRatio`는 cv 3%로 붙어 있어 기준선으로 쓸 수 있고,
+`hpPerIntentTick`은 cv 49%로 단발 비교가 무의미하다. 그리고 결정적으로 —
+블록 O의 0.1058과 블록 P의 0.1480은 **이 단일 배치의 산포 0.0526~0.1625 안에 둘 다 들어간다.**
+「+40%」는 신호가 아니었다. 「정규화했으니 됐다」로 읽혔다면 그것이 틀렸다.
+
+앞으로 execmon 계열은 n≥3으로 돌리고 두 지표의 산포를 함께 낸다. B 술어 수정 전후 비교의
+기준선은 **`failingRatio` 0.496 ± 0.015**로 잡는다.
+
+## Q-6 결정성 — (a)는 닫혔고, (b)는 지목한 전량이 결정적으로 나왔다
+
+### Q-6(1) 지목과 근거
+
+기준: 「판정량이 난수·타이밍·경로탐색 분기에 의존하는가」. 코드 신호로 좁혔다 —
+`getRandom()/nextInt/RandomSource` 계열(난수), 몹 브레인 구동(`setTarget/increaseAngerAt`),
+지연·틱수 판정량(`ticksTo*`), 경로탐색 분기(`planner()/isUnreachable/expansions`).
+이 중 **판정량 자체가 연속 운동량이거나 지연인 것**만 후보로 삼았다 — 몹을 스폰하되 분류값
+(장비 슬롯·규칙 문자열·타겟 목록)을 재는 하니스는 제외했다.
+
+이미 n≥10으로 측정된 것(별도 실행 불필요): bot_dodge(50×2), bot_coldstart_dist·tail1/2/3(30),
+bot_warden_pursuit(30), bot_kite_flip(10), bot_creeper_wall·lowfuse·path_blocked(10, 블록 P).
+
+새로 지목해 n=10을 돌린 것 10종: bot_kite_band_latch, bot_kite_recover, bot_kite_execmon_lat,
+bot_kite_approach, bot_warden_band, bot_warden_charge, bot_warden_probe, bot_rule1_fast,
+bot_rule_dcell, bot_survival.
+
+### Q-6(2) 결과 — 흔들리지 않았다
+
+    bot_kite_band_latch   PASS 10/10      bot_warden_charge  PASS 10/10
+    bot_kite_recover      PASS 10/10      bot_warden_probe   PASS 10/10
+    bot_kite_execmon_lat  PASS 10/10      bot_rule1_fast     PASS 10/10
+    bot_kite_approach     PASS 10/10      bot_survival       PASS 10/10
+    bot_warden_band       PASS 10/10      bot_creeper_wall   PASS 10/10 (재확인)
+    bot_rule_dcell        FAIL  0/10
+
+**10종 전부 10/10 또는 0/10이다. 판정이 한 번도 흔들리지 않았다.**
+`bot_rule_dcell`의 0/10은 비결정성이 아니라 **결정적 FAIL**이며, M-7(1)의 「회귀가 아니라 미구현」
+판정과 일치한다 — 발행 경로가 없으면 흔들릴 것도 없다.
+
+즉 **지목한 후보는 전부 [결정적]으로 판명됐다.** 값으로 확인된 [확률적] 하니스는 현재
+`bot_dodge`(18/50 두 번)와 `bot_coldstart_*`(설계서:930 이봉 분포) 둘뿐이다.
+나머지 전량은 [결정적] 잠정 분류로 두고, **T5.6 기준선 실행에서 어차피 전량이 돌므로 그때 확정한다.**
+별도 n=10 배치를 52종으로 돌리지 않았다.
+
+## Q-7 클래스 수 정산 — 산술 불일치가 세 번째로 실재를 드러냈다
+
+세 집계가 서로 다른 단위였고, 그중 둘은 **집계기 자체가 고장나 있었다.**
+
+    M-8 / sweep    [I] 46 + [II] 19 = 65   ← 클래스 단위. [I] 46은 sweep이 손으로 적은 명단
+    P-6            58                      ← 하니스 이름 단위. **자동 집계, 그리고 틀렸다**
+    실제 (레지스트리) 96 이름 / 51 최상위 클래스 / 15 중첩 하니스 클래스
+
+차이 7의 정체: sweep의 [I] 46 명단 중 **BotAbilityPathTest, BotLivingEatTest, BotR1TriggerTest,
+BotRule1ActionTest** 4개는 이름을 삼항연산·switch로 만든다. 나머지 3은 [II]가 「19 클래스(33 팔)」로
+클래스와 팔을 섞어 센 데서 나온다. 즉 65는 클래스, 58은 이름, 96은 등록 이름이며 **어느 둘도
+같은 단위가 아니었다.**
+
+그런데 정산의 값은 단위 정리가 아니라 **구멍 둘**이었다:
+
+    [구멍 1] P-6의 「58/58, 미보유 0」은 틀렸다.
+      자동 생성기가 `return "bot_..."` 리터럴만 찾았으므로, 이름을 삼항연산으로 만드는
+      BotProtectArmedTest / BotRule1ActionTest / BotRule2ActionTest **3클래스 6이름**을
+      통째로 건너뛰었다: bot_protect_armed, bot_protect_unarmed, bot_rule1_kite,
+      bot_rule1_nokite, bot_rule2_allow, bot_rule2_deny.
+      → 채웠다. **지금 96/96, 미보유 0** (레지스트리 등록 이름 기준으로 재감사).
+
+    [구멍 2] P-1의 builtBounds sweep도 같은 이유로 같은 클래스들을 건너뛰었다.
+      그중 판정 코어가 시공 범위를 벗어나는 것이 둘이었다 —
+      BotAbilityPathTest(시공 dx −6..22, dz −6..20 → dx=−7·dz=−7 노출),
+      BotProtectInterveneTest(시공 dz ±4 → dz ±5..7 노출).
+      → 선언을 넣었다. 나머지 12클래스는 시공이 ±7 코어를 덮고 있어 조치 불필요임을 확인했다
+      (BotCatchMeetTest ±34, BotHealTest ±12, BotIdleTest ±22, BotLivingEatTest ±8,
+      BotLivingSleepTest ±8, BotPickupTest −16..20/±16, BotProtectArmedTest ±16,
+      BotProtectLowUserTest ±12, BotProtectRangedTest ±18, BotR1TriggerTest ±12,
+      BotRule1ActionTest −36..16/±16, BotRule2ActionTest ±16).
+
+**교훈**: 자동 sweep의 분모는 sweep 자신이 만든 것이므로 그것으로 자기를 검증할 수 없다.
+이번엔 레지스트리(런타임이 실제로 아는 이름)를 제3의 기준으로 대서 잡았다.
+앞으로 하니스 전수 집계는 **레지스트리 등록 이름**을 분모로 한다.
