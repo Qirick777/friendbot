@@ -304,3 +304,40 @@ C4 분기(A* 목표 설정 + 스프린트 + 기존 startRiding 팔로 인계), C
 
 `scenarioSpec()` 본문은 이번 세션에 작성한 11개 하니스에 채웠다. 나머지 레거시 하니스는
 `(unstated)`로 찍히며, 위 표가 그 미기록 목록이다 — **고치지 않는다**는 지시를 지켰다.
+
+## 블록 G~J 검증 결과
+
+| 하니스 | 결과 |
+|---|---|
+| `bot_r1_swing` | **PASS** `r1FiredTicks:119, attackMotionTicks:119, blockingTicks:115, swingsIssued:18` |
+| `bot_r1_idle` (반대) | **PASS** `r1FiredTicks:0, attackMotionTicks:0, blockingTicks:0` |
+| `bot_r1_proximity` (회귀) | **PASS** `r1FiredTicks:0, observedRanged:false` |
+| `bot_idle_follow_hungry` | **PASS** `arriveTick:71, arriveDist:2.86, sprintTicks:0, maxStep:0.226, botTravel:25.17` |
+| `bot_idle_wander` (반대) | **PASS** `botTravel:17.63, maxDist:6.18, followTicks:0, maxStep:0.216` |
+| `bot_pickup_gift` | **PASS** `gained:3, fetchTicks:47, itemEntityGone:true` |
+| `bot_pickup_combat` (반대) | **PASS** `itemEntityGone:false, gained:0, fetchTicks:0` |
+| `bot_pickup_natural` (반대) | **PASS** `itemEntityGone:false, gained:0, fetchTicks:0` |
+| `bot_protect_lowuser` | **PASS** `pickedUserHunter:80, pickedMaxDps:0, rule:P2` |
+| `bot_protect_highuser` (반대) | **PASS** `pickedUserHunter:0, pickedMaxDps:80, rule:P1` |
+| `bot_protect_ranged_guard` | **PASS** `pickedSkeleton:100, engageRangedTicks:100, maxBotUserDist:7.31` (사수는 14블록) |
+| `bot_protect_ranged_melee` | **PASS** `pickedZombie:100, pickedSkeleton:0, maxBotUserDist:2.00` |
+| `bot_survival_heal` | **PASS** `botHp:8.0→15.0, apples:2→0` |
+| `bot_survival_nopotion` (반대) | **PASS** `botHp:8.0→8.0, botGain:0.0` |
+| `bot_rescue_heal` | **PASS** `userHp:2.0→5.0, potions:1→0, everHealUser:true` |
+| `bot_rescue_nopotion` (반대) | **PASS** `userHp:2.0→2.0, protMode:FLEE, everHealUser:false` |
+| 회귀 `bot_protect_intervene` | PASS 3/3 `aggroDrop:97.4, neutralDrop:0.0`, canary OK |
+| 회귀 `bot_protect_priority` | PASS 3/3, canary OK |
+
+### 이번 블록에서 값이 잡아낸 측정 결함 (전부 내 것)
+
+1. **유저의 자연 재생을 통제하지 않았다.** `bot_rescue_nopotion`이 **포션 없이** `userHp 2.0→6.5`.
+   `TestUser.spawn`이 포만도를 20으로 두므로 유저가 스스로 회복한 것이다. 포션 팔의 7.5도 그만큼
+   재생이 섞여 있었다. 유저 포만도도 10으로 내리자 `2.0→5.0`(포션) / `2.0→2.0`(대조)으로 갈렸다.
+   경보가 울렸을 때 **먼저 의심한 것은 구현이 아니라 측정**이었고, 그게 맞았다.
+2. **`HEAL_USER`는 순간 모드다.** 관측 창 끝에서 `mode()`를 읽으면 이미 `ENGAGE_MELEE`다
+   (회복 후 유저가 치명선을 벗어났으므로). `everHealUser`로 바꿔 「그 순간이 있었는가」를 잰다.
+3. **「정지」를 관측 창 끝에서 쟀다.** 16장은 도착 후 「**다시 배회**」를 요구하므로 창 끝의 이동은
+   실패가 아니라 스펙 준수다. 판정을 **도착 시점 기준**으로 옮겼다.
+4. **스프린트는 즉시 멈추지 않는다.** 도착 +1틱부터 재면 `postArrivalSpeed 0.1514` — 0.28
+   스프린트가 바닐라 마찰로 감속하는 값이다. 창을 +10~+30으로 옮겼다. **행동이 아니라 물리를
+   재고 있었다.**

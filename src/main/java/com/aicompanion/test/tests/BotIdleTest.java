@@ -189,7 +189,11 @@ public class BotIdleTest implements BotTest {
         }
         if (arriveTick >= 0) {
             maxDistAfterArrival = Math.max(maxDistAfterArrival, d);
-            if (ctx.elapsedTicks > arriveTick && ctx.elapsedTicks <= arriveTick + 20) {
+            // The window starts at +10, not +1: a sprinting bot cannot stop dead. Vanilla friction
+            // sheds ~40% of the velocity per input-free tick, so ticks +1..+5 are the deceleration
+            // itself (measured 0.1514 on the first, from a 0.28 sprint). Measuring there judges the
+            // physics, not the behaviour. +10..+30 sits well inside BotIdle's 40-tick pause.
+            if (ctx.elapsedTicks >= arriveTick + 10 && ctx.elapsedTicks <= arriveTick + 30) {
                 postArrivalSpeed = Math.max(postArrivalSpeed, step);
             }
         }
@@ -219,7 +223,7 @@ public class BotIdleTest implements BotTest {
                 String.format("%.2f", maxDist), String.format("%.2f", botTravel), sprintTicks,
                 followTicks, String.format("%.3f", maxStep));
         String measured = String.format(
-                "arm:%s,arriveTick:%d,arriveDist:%.2f,postArrivalSpeed:%.4f,maxDistAfterArrival:%.2f,"
+                "arm:%s,arriveTick:%d,arriveDist:%.2f,postArrivalSpeed[+10..+30]:%.4f,maxDistAfterArrival:%.2f,"
                         + "finalDist:%.2f,minDist:%.2f,maxDist:%.2f,endSpeed:%.4f,botTravel:%.2f,"
                         + "sprintTicks:%d,followTicks:%d,maxStep:%.3f,food:%d,enter:%.0f,exit:%.0f",
                 mode.name().toLowerCase(), arriveTick, arriveDist, postArrivalSpeed,

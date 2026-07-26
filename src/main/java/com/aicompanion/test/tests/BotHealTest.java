@@ -59,6 +59,8 @@ public class BotHealTest implements BotTest {
     private int applesBefore;
     private int applesAfter;
     private String protMode = "none";
+    /** HEAL_USER is transient — by the end of the window the user is no longer critical. */
+    private boolean everHealUser;
     private String survMode = "NONE";
 
     public enum Mode { SELF, USER }
@@ -76,8 +78,8 @@ public class BotHealTest implements BotTest {
     @Override
     public String scenarioSpec() {
         return String.format(
-                "bot food held at %d — BELOW vanilla's regeneration floor of 18, so any health rise "
-                + "must come from an item; bot invulnerable (the arms measure healing, not damage "
+                "bot AND user food both held at %d — BELOW vanilla's regeneration floor of 18, so "
+                + "any health rise must come from an item; bot invulnerable (the arms measure healing, not damage "
                 + "exchange); bot hp %s, user hp %s; heal item: %s; a 300hp NoAi zombie targets the "
                 + "user so 9.1 intervenes at all",
                 NO_REGEN_FOOD, mode == Mode.SELF ? "8/20 = 40%" : "20/20",
@@ -149,6 +151,12 @@ public class BotHealTest implements BotTest {
         user = TestUser.spawn(ctx.server, ctx.level, new BlockPos(o.getX() + 2, o.getY(), o.getZ()));
         user.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0);
         user.setInvulnerable(false);     // a splash potion must be able to affect it
+        // The USER's food matters too, and the first run missed it: TestUser.spawn sets it to 20,
+        // so vanilla regenerated the user on its own. Measured — bot_rescue_nopotion, with no
+        // potion anywhere, reported userHp 2.0→6.5. The 「회복됐다」 in the potion arm was therefore
+        // part regeneration as well. Held below the regen floor, any user gain is the potion.
+        user.getFoodData().setFoodLevel(NO_REGEN_FOOD);
+        user.getFoodData().setSaturation(0.0F);
         user.setDeltaMovement(Vec3.ZERO);
         user.setHealth(mode == Mode.USER ? 2.0F : 20.0F);   // 10% = below 15% 치명선
 
@@ -170,6 +178,7 @@ public class BotHealTest implements BotTest {
         applesBefore = count(bot, Items.GOLDEN_APPLE);
         potionsAfter = potionsBefore;
         applesAfter = applesBefore;
+        everHealUser = false;
     }
 
     @Override
@@ -189,6 +198,9 @@ public class BotHealTest implements BotTest {
         potionsAfter = count(bot, Items.SPLASH_POTION);
         applesAfter = count(bot, Items.GOLDEN_APPLE);
         protMode = bot.protection().mode().name();
+        if ("HEAL_USER".equals(protMode)) {
+            everHealUser = true;
+        }
         survMode = bot.survival().mode().name();
         return ctx.elapsedTicks >= RUN;
     }
@@ -202,8 +214,8 @@ public class BotHealTest implements BotTest {
             ok = withItem ? (botGain > 0.5F && applesAfter < applesBefore)
                     : (botGain <= 0.01F);
         } else {
-            ok = withItem ? (userGain > 0.5F && potionsAfter < potionsBefore)
-                    : (userGain <= 0.01F && !"HEAL_USER".equals(protMode));
+            ok = withItem ? (userGain > 0.5F && potionsAfter < potionsBefore && everHealUser)
+                    : (userGain <= 0.01F && !everHealUser);
         }
 
         LOGGER.info("[HEAL-TEST] arm={} botHp={}→{} userHp={}→{} apples={}→{} potions={}→{} prot={} surv={}",
@@ -211,10 +223,11 @@ public class BotHealTest implements BotTest {
                 potionsBefore, potionsAfter, protMode, survMode);
         String measured = String.format(
                 "arm:%s,botHp:%.1f->%.1f,botGain:%.1f,userHp:%.1f->%.1f,userGain:%.1f,"
-                        + "apples:%d->%d,potions:%d->%d,protMode:%s,survMode:%s,food:%d,guardLine:%.2f",
+                        + "apples:%d->%d,potions:%d->%d,protMode:%s,everHealUser:%b,survMode:%s,"
+                        + "botFood:%d,userFood:%d,guardLine:%.2f",
                 name(), hpStart, hpMax, botGain, userHpStart, userHpMax, userGain,
-                applesBefore, applesAfter, potionsBefore, potionsAfter, protMode, survMode,
-                NO_REGEN_FOOD, BotSurvival.GUARD_LINE);
+                applesBefore, applesAfter, potionsBefore, potionsAfter, protMode, everHealUser,
+                survMode, NO_REGEN_FOOD, NO_REGEN_FOOD, BotSurvival.GUARD_LINE);
         String expected;
         if (mode == Mode.SELF) {
             expected = withItem
