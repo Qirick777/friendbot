@@ -40,8 +40,10 @@ public class BotDodgeTest implements BotTest {
     private float prevHp;
 
     /**
-     * 50, not the screening tier's 30. At 24/30 the point estimate landed exactly on the spec
-     * threshold (0.80) and only the Wilson bound missed (0.627 vs 0.65) — that is sample shortage,
+     * 50, not the screening tier's 30. At 24/30 the point estimate landed exactly on this harness's
+     * own threshold (0.80 — NOT a spec value, see {@link #successThreshold()}; the earlier wording
+     * "the spec threshold" here was a mislabel, 유형 #8) and only the Wilson bound missed
+     * (0.627 vs 0.65) — that is sample shortage,
      * not evidence of a defect. The screening n is a floor, not a cap: if p-hat holds at 0.80, n=50
      * puts the bound at ~0.670 and the question is settled either way.
      */
