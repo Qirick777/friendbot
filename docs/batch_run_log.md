@@ -1080,3 +1080,155 @@ window_variance REFLEX:196/IDLE:2505, warden_live_speed IDLE:360, warden_pursuit
 결론지은 상태를 그대로 재현한 것이다(`stable:false`, `aboveEnterLine:0`, `canKiteTrue:30/30`).
 tail1/2/3은 시드 11/22/33의 새 표본이며 §6에 대응 기록이 없다 — 최초 기록이다
 (평균 0.2062 / 0.2050 / 0.2201, sd 0.0701 / 0.0770 / 0.0647, 셋 다 `stable:false`).
+
+# 블록 P — 격리 수리 + 잔여 진단
+
+배치 RUN_ID `P20260726T103202Z-11681`, 5 실행. **게이트 4조건 전부 통과**:
+이름 일치, 기대 N == 수신 N, RUN_ID 16/16 일치, 그리고 새 조건 —
+`TREE-BEGIN == TREE-END = 9b70089…:da39a3ee…:df0a8596…` → **NOT-DIRTY**.
+게이트 전문 `docs/bottest_gate_blockP.txt`.
+
+## P-0 락 사각 봉쇄 — 소스 트리 불변 조건
+
+러너가 배치 시작·끝에 트리 지문(`HEAD : sha1(git status --porcelain) : sha1(git ls-files -s src/** build.gradle)`)을
+찍고, 다르면 `BATCH-DIRTY`와 함께 **모든** 게이트 라인에 DIRTY를 붙인다. DIRTY는 PASS가 아니다.
+설계서 R.2 「정정 13」으로 등록했다. 이번 배치가 첫 실전이고 NOT-DIRTY로 통과했다.
+
+부수 효과로 규율이 실제로 걸렸다: 배치가 도는 동안 설계서·원장·하니스 어느 것도 편집하지 못했고,
+P-6의 scenarioSpec 채우기와 정정 13~15 등록은 전부 BATCH-END 이후로 밀렸다.
+
+## P-1 격리 수리 — MISMATCH 0. 게이트 1의 판정점을 통과했다
+
+### P-1(1)(2) 두 상자를 분리했다
+
+`BotTest.builtBounds()`를 추가하고 판정 코어를 `declared ∩ built ∩ ±8`, 1칸 축소로 바꿨다.
+**`arenaBounds`(스캔·복원)는 좁히지 않았다** — `bot_catch_fall`의 물이 dx −24에 있었고 거기까지
+복원한 것이 그 하니스를 1/3 → 3/3으로 만든 값 근거다. 좁혔으면 그 결함이 되살아난다.
+계약 변경이 아니라 계약 이행이라는 지시를 이렇게 읽었다: **판정 범위만 계약 원문대로 좁힌다.**
+
+미선언 하니스 전수 목록 — **36개 클래스에 선언을 넣었다.** 그중 시공이 아예 없어 `NO_BUILD`를
+선언한 11개(블록 판정 영역이 비고 엔티티·봇·유저 상태만 판정):
+bot_alive, bot_death, bot_persist_save, bot_persist_load, bot_phase2_combo, bot_ranged,
+bot_single, bot_coldstart_dist(+tail1/2/3).
+나머지 25개는 시공 루프 범위를 그대로 선언했다(예: bot_creeper_wall {−6,8,−4,4},
+bot_path_blocked {−2,14,−4,4}, bot_look {−1,1,−1,1}, bot_warden_probe {−6,70,−6,6}).
+
+이미 판정 코어를 덮고 있어 선언이 불필요한 것들(bot_equip ±8, bot_rule4_*, bot_rule_dcell,
+bot_kite_execmon/flip/recover, bot_warden_band_below/above, 그리고 x가 −8 이하에서 시작하고
+z가 ±8 이상인 속도 계열 전부)은 기본값을 유지했다.
+
+### P-1(3) 각 n=10 — canary MISMATCH 0
+
+    하니스               수리 전                          수리 후 (n=10)              판정 코어
+    bot_creeper_wall     FAIL 1/3, MISMATCH x2            PASS 10/10, canary OK       x−5..7 z−3..3 (455칸)
+    bot_creeper_lowfuse  K FAIL / L PASS / O PASS (뒤집힘) PASS 10/10, canary OK       x−5..7 z−3..3 (455칸)
+    bot_path_blocked     M-3 FAIL 1/3 / O PASS (뒤집힘)    PASS 10/10, canary OK       x−1..7 z−3..3 (315칸)
+
+**30 트라이얼에서 MISMATCH 0.** 뒤집힘이 사라졌다. 원인이 하나였다는 것이 값으로 확인된다 —
+가설이 틀렸다면 MISMATCH가 남았을 것이고, 남지 않았다.
+
+### P-1(4) 판정 밖으로 나간 어긋남은 로깅으로 남는다
+
+침묵 제외가 아니다. ring1이 매 트라이얼 찍는다:
+
+    canary ring1 (in arena, restored, not judged): outerBlocks changed:764
+      first(-24,-1,-8) oak_leaves[distance=3,persistent=false,waterlogged=false]
+                    => oak_leaves[distance=2,persistent=false,waterlogged=false]
+
+764칸이다. **이 현상은 사라지지 않았고 사라질 수도 없다** — 판정 상자 밖 월드젠 숲 전체가
+매 트라이얼 distance를 다시 도출한다. 이전에 보이지 않았던 이유는 하나뿐이다: 판정 코어가
+그 숲까지 손을 뻗고 있었기 때문이다.
+
+## P-2 회피 판정 분모 전환 — 이월로 확정
+
+`BotTest.aggregateSample()`을 추가해 매니저가 화살 표본에 **같은 임계 0.80과 같은 슬랙 0.15**를
+적용한다. 판정 라인에 `judgedOn:` 필드가 붙어 어느 분모로 판정했는지가 값으로 남는다.
+
+블록 P 실행(n=10 오버라이드): `trials:10,passed:5,judgedOn:aggregate:35/40,wilson95Lower:0.739`
+→ **PASS**. 트라이얼 분모였다면 5/10으로 FAIL이었을 것이다.
+
+**주의 — 이 실행의 표본은 40발이다.** n=10 오버라이드는 내가 수리 검증을 위해 건 것이고
+화살 표본을 200발에서 40발로 줄였다. `bot_dodge`의 권위 있는 값은 여전히 n=50 실행 둘이다:
+0.750 / 0.761, 합산 400발 하한 **0.774**. 판정은 두 경우 모두 PASS(≥0.65)로 같다.
+
+§9(B) 부채 갱신: 「0.36 → 0.80 구현 슬롯」 **해제**.
+→ 「T5.6 확정 게이트 이월 (스크리닝 통과, 화살 단위 Wilson 하한 0.774)」. 기능 결함 아님.
+
+## P-3 window_variance 좀비 행 — 입력이지만 파급은 0이다
+
+**(1) 좀비 행은 입력이다.** 설계서:796 「좀비(1.00) mean±3σ | 0.114±0.004 ✓ | ±0.003 ✓ |
+±0.002 ✓ | ±0.002 ✓」가 :881 표의 좀비 sd에서 나온 칸이다(3σ ≈ 0.004 ↔ sd .0018).
+
+**그런데 그 표가 답하는 물음은 「구간이 봇 스프린트 0.2806을 가로지르는가」다.** 새 값으로 다시 계산한다:
+
+    W20  0.1110 ± 3(0.0145) = [0.0675, 0.1545]   상한이 0.2806의 55%   ✓
+    W40  0.1109 ± 3(0.0115) = [0.0764, 0.1454]                        ✓
+    W60  0.1108 ± 3(0.0098) = [0.0814, 0.1402]                        ✓
+    W100 0.1106 ± 3(0.0080) = [0.0866, 0.1346]                        ✓
+
+**네 칸 전부 ✓ 그대로다.** ✓가 ✗로 뒤집히려면 좀비 sd가 (0.2806−0.1110)/3 = **0.0565**여야 하고,
+이는 새 값의 3.9배·옛 값의 31배다. 그리고 W60 채택을 실제로 정한 것은 워든 행이며(:797, :886-887)
+워든 행은 재현됐다.
+
+**따라서 이 무효화의 파급은 0이다.** P-3(2)의 R1 억제 팔은 **돌리지 않는다** — 지시의 전제
+「좀비 행이 어떤 결정의 입력도 아니면 재측정은 T5.6으로 미룬다」에 실질적으로 해당한다.
+정확히는 「입력이지만 그 입력이 바꾸는 결정이 없다」이므로, 그 구분을 적어 두고 T5.6으로 미룬다.
+부채: 「좀비 창별 sd가 8~11배 커진 원인(REFLEX:196 유력) 미규명 — T5.6에서 R1 억제 팔로 확인」.
+
+## P-4 warden_live_speed — 내 이전 진단을 정정한다
+
+**정정 먼저.** 블록 O에서 나는 「봇이 교전 분기에 아예 들어가지 않았고, 봇이 도망치지 않으니
+워든도 추격하지 않는다」라고 썼다. **틀렸다.** `BotWardenLiveSpeedTest.java`의 tick()은 매 틱
+`bot.setDeltaMovement(Vec3.ZERO)`와 `bot.moveTo(origin…)`으로 **봇을 의도적으로 고정한다**
+(주석: 「The bot stays put; only the warden moves, so the observation is purely its approach」).
+`moveOwner:IDLE:360`은 결함 징후가 아니라 **하니스 설계 그대로**다. 봇은 애초에 교전할 예정이 없다.
+
+**따라서 사용자가 준 후보 셋(R1 트리거 정정 → 9장 변경 → 타겟 인식 조건)은 값으로 배제된다.**
+셋 다 봇 측 코드이고, 이 하니스에서 봇은 전투·반사 코드를 한 틱도 돌리지 않았다
+(`moveOwner:IDLE:360`, `idleCommandedTicks:0`, REFLEX 0틱). 봇 쪽에 바뀔 것이 없었다.
+
+**실패는 전적으로 워든 쪽이다.** 화가 나 있고 타겟이 잡힌 워든이 움직이지 않는다:
+3 트라이얼 모두 `observedSpeed:0.0000`, `indepWholeSpan:0.0046 / 0.0008 / 0.0012`.
+카나리 기준선은 `mobs=1, types:player=1,warden=1`로 워든이 실재함을 확인한다.
+
+**같은 배치에서 워든이 움직인 하니스와의 차이는 정확히 하나다.** `bot_warden_pursuit`의 워든
+셋업은 `spawn → setInvulnerable(true) → increaseAngerAt(bot) → setAttackTarget(bot)`,
+40틱마다 anger·target 재설정 — `bot_warden_live_speed`와 **줄 단위로 같다**. 다른 것은 봇뿐이다:
+pursuit의 봇은 정착 구간 뒤 실제로 도망친다(`botFled:69.07`, `moveOwner RANGED:340/IDLE:80`,
+draw 30회 평균 0.2784). live_speed의 봇은 처음부터 끝까지 고정이다.
+
+**후보(코드 근거는 있으나 값으로 확정하지 못함)**: 완전히 정지한 대상은 진동을 발생시키지 않고,
+워든의 이동은 진동·소리 기반 경로 갱신에 의존한다. 설계서:942의 「5회는 첫 창이 워든의
+등장(emerge/roar) 구간에 걸려 관측 ≈ 0이었다」도 같은 계열의 관측이다.
+
+**확정하지 못하는 이유를 명시한다**: 07-25 실행에 대해 봇 고정 여부·moveOwner 기록이 **없다**.
+설계서:860-862은 t1/t2/t3 속도 셋만 싣는다. 그러므로 「같은 전제에서 예전엔 됐다」를 뒷받침할
+값이 없고, 「무엇이 바뀌었나」를 봇 코드에서 찾을 근거도 없다.
+필요한 것은 단일 변수 팔 하나다 — **봇 고정을 N틱 풀고 워든이 움직이기 시작하는지.**
+고치지 않았다. 부채 (A) 하니스로 회수 가능.
+
+## P-5 execmon 대가 지표 — 실었다. 판정에는 넣지 않았다
+
+`hpPerIntentTick = hpLostTotal / intentOpenTicks`, `failingRatio = failingTicksTotal / intentOpenTicks`.
+통과 조건은 손대지 않았다(여전히 `startedKiteable && execMonitorFired && ticksToExec <= 20`).
+
+블록 P 첫 기준값: `hpLostTotal:31.7, intentOpenTicks:214 → hpPerIntentTick:0.1480,
+failingRatio:0.519, gapAtFlee:1.49`.
+블록 O 값으로 같은 지표를 계산하면 `23.7 / 224 = 0.1058`. 절대 hp는 15.7 → 23.7 → 31.7로
+계속 커졌지만 정규화 값은 0.106 → 0.148이다. **이제 B 술어 수정의 전후를 비교할 축이 생겼다.**
+(블록 O의 intentOpenTicks 224는 기록이 있으나 07-25의 hp 15.7에는 구간 길이 기록이 없어
+그 시점 값은 계산할 수 없다 — 기준값 축적은 지금부터다.)
+
+## P-6 scenarioSpec — 전량 채웠다
+
+    이전: 12 / 58 하니스 이름 (46 미보유)
+    지금: 58 / 58, 미보유 0
+
+42개 클래스에 채웠다. 내용은 코드에서 도출한 것만 싣는다 — `MAX_HEALTH` setBaseValue 호출값,
+`bot.setInvulnerable(...)`, 스폰 몹 종류, 관측 틱·트라이얼 수, `builtBounds` 선언, 그리고
+유저 유무와 그에 따른 16장 자율 이동 도달 여부(코드 인용 포함).
+
+**생성 중 한 건을 스스로 잡았다**: `timeoutTicks()`/`repeats()`가 리터럴이 아니라 상수 계산식인
+9개 클래스(kite 계열, rule4, rule_dcell, equip)에서 자동 생성기가 기본값 200/1을 적어 넣었다.
+그것은 없는 전제를 지어내는 것이므로 「관측 창과 트라이얼 수는 리터럴이 아니라 상수 계산식이다」로
+바꿨다. **게이트 7의 분모는 58이다.**

@@ -62,6 +62,15 @@ public class BotRangedTest implements BotTest {
         return NO_BUILD;
     }
 
+    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    @Override
+    public String scenarioSpec() {
+        return "setBaseValue(MAX_HEALTH) 호출값: 4000.0 (봇/표적 구분은 setup() 참조). bot.setInvulnerable(true). 스폰 "
+                + "몹: zombie. 관측 700틱, 트라이얼 3회. 시공 범위 선언: 없음(NO_BUILD) — 블록 판정 영역이 비어 있고 엔티티/봇 상태만 판정한다. 유저 "
+                + "없음(TestUser.spawn 미호출) → Perception.java:131이 봇 외 플레이어를 찾지 못해 user==null → "
+                + "BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성. ";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

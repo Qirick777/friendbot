@@ -65,6 +65,13 @@ public class BotCreeperLowFuseTest implements BotTest {
         return new int[]{-6, 40, -4, 4};
     }
 
+    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    @Override
+    public String scenarioSpec() {
+        return "bot.setInvulnerable(true). 스폰 몹: creeper. 관측 80틱, 트라이얼 3회. 시공 범위 선언: {-6, 40, -4, 4}. "
+                + "TestUser 있음 → 16장 자율 이동이 마지막 else에서 돌 수 있다. idleCommandedTicks로 값 확인. ";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

@@ -80,6 +80,14 @@ public class BotKiteFlipTest implements BotTest {
         return GLUE_TICKS + FLEE_TICKS + 60;
     }
 
+    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    @Override
+    public String scenarioSpec() {
+        return "setBaseValue(MAX_HEALTH) 호출값: 200.0 (봇/표적 구분은 setup() 참조). bot.setInvulnerable(false). 스폰 "
+                + "몹: zombie. 관측 창과 트라이얼 수는 리터럴이 아니라 상수 계산식이다(timeoutTicks()/repeats() 참조). 유저 없음(TestUser.spawn 미호출) → Perception.java:131이 봇 외 플레이어를 "
+                + "찾지 못해 user==null → BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성. ";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

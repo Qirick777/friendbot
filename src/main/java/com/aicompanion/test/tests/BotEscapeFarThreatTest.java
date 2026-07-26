@@ -48,6 +48,14 @@ public class BotEscapeFarThreatTest implements BotTest {
         return new int[]{-8, THREAT_X + 4, -4, 4};
     }
 
+    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    @Override
+    public String scenarioSpec() {
+        return "setBaseValue(MAX_HEALTH) 호출값: 20.0 (봇/표적 구분은 setup() 참조). bot.setInvulnerable(true). 스폰 몹: "
+                + "zombie. 관측 140틱, 트라이얼 1회. 시공 범위 선언: {-8, THREAT_X + 4, -4, 4}. TestUser 있음 → 16장 자율 이동이 "
+                + "마지막 else에서 돌 수 있다. idleCommandedTicks로 값 확인. ";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();

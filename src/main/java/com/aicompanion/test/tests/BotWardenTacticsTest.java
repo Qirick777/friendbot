@@ -60,6 +60,15 @@ public abstract class BotWardenTacticsTest implements BotTest {
         return new int[]{-4, 24, -4, 4};
     }
 
+    /** P-6 (유형 #9): 이 판정이 측정된 세계의 전제. */
+    @Override
+    public String scenarioSpec() {
+        return "setBaseValue(MAX_HEALTH) 호출값: 20.0, 500.0 (봇/표적 구분은 setup() 참조). "
+                + "bot.setInvulnerable(true). 스폰 몹: warden, zombie. 관측 120틱, 트라이얼 1회. 시공 범위 선언: {-4, 24, -4, "
+                + "4}. 유저 없음(TestUser.spawn 미호출) → Perception.java:131이 봇 외 플레이어를 찾지 못해 user==null → "
+                + "BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성. ";
+    }
+
     @Override
     public void setup(BotTestContext ctx) {
         AICompanionBot bot = BotManager.current();
