@@ -934,3 +934,58 @@ drops=true 팔에서 새로 나온 어긋남의 정체:
 **제안**: M-5(1)의 52종 × n=10 대신, ① 위 「완전히 덮음」 목록을 결정성 후보에서 제외하고
 ② 노출된 하니스 중 그 노출 띠에 **이웃 의존 블록**(잎·울타리·유리판·계단·waterlogged)이 실제로
 서 있는 것만 n=10을 돌린다. 대상 선정은 사용자 몫이다 — n=10은 돌리지 않았다.
+
+## O-5 게이트 8 — §6 실측 상수 9종
+
+### O-5(1) 오염 위험 판정 — 9종 전부 [무관], 근거는 코드 인용
+
+「속도만 재니까」가 아니라 「이 창에서 IDLE이 이동을 지시할 수 없다」의 코드 인용으로 답한다.
+사슬은 셋이고 하나만 끊겨도 16장 이동은 도달하지 않는다.
+
+1. `Perception.java:128-141` `nearestUser()` — `for (ServerPlayer p : level.players())`에서
+   봇을 제외한 최근접 플레이어를 고른다. `Perception.java:68` `user = nearestUser(...)`.
+   즉 **레벨에 봇 말고 다른 ServerPlayer가 없으면 `user == null`이다.**
+2. dev 서버(`-Dbottest.auto`)에는 접속 플레이어가 없다. 가짜 플레이어를 만드는 유일한 경로는
+   `TestUser.spawn`이며, **9종의 소스 7개 파일 전부 `TestUser` 참조가 0회다**
+   (`grep -c TestUser` = 0: BotSpeedProbeTest, BotColdStartDistTest(+Tail1/2/3),
+   BotRule1FastTest, BotWindowVarianceTest, BotWardenLiveSpeedTest, BotWardenPursuitTest,
+   BotWardenProbeTest).
+3. `BotIdle.java:86-89` — `ServerPlayer user = bot.perception().user; if (user == null) { return; }`.
+   목표 설정도 정지 지시도 이 줄 아래에 있다. `BotPickup.java:87`·`:150`도 동일한 관문이다.
+
+**따라서 9종 모두 [무관]이다.** 그리고 이 논증은 이제 값으로도 확인된다 —
+판정 라인의 `idleCommandedTicks`가 0이어야 한다.
+
+**이미 값이 있는 1종**: `bot_warden_probe`는 M-3 배치에 들어 있었고
+`idleCommandedTicks:0, idleOwnedTicks:574`였다. 분기는 574틱 돌았고 이동 지시는 0틱이다.
+나머지 8종은 블록 O 배치에서 값으로 확인한다(§O-5(3)).
+
+### O-5(2) 전제 명시 — 9종 scenarioSpec에 봇 이동 활성 여부를 실었다
+
+7개 클래스에 `scenarioSpec()`을 추가했다. 각 항목이 밝히는 것: 봇 최대체력 400 + 매 틱 만피 회복,
+추격자 `setInvulnerable(true)`, 그리고 「유저 없음 → Perception.java:131이 봇 외 플레이어를 찾지
+못해 user==null → BotIdle.java:87-89 즉시 반환. 16장 자율 이동 비활성이며 idleCommandedTicks:0로
+값 확인된다」. 이제 이 전제는 `(unstated)`가 아니라 START 라인에 찍힌다.
+
+### O-5(4) bot_warden_probe는 게이트 8 명단과 겹친다 — 이미 재측정된 것으로 처리해도 된다
+
+겹친다. 그리고 M-3에서 RUN_ID 게이트 하에 재실행됐다. 판정:
+
+    [BOTTEST] bot_warden_probe PASS runId=R20260726T072157Z-4478
+      botSprint:0.2806  wardenChase:0.0477  margin:83.0%  chargeSeen:true(t=568,held=35)
+      sonicDamage:10.0  moveOwnerAnomalyTicks:0  idleOwnedTicks:574  idleCommandedTicks:0
+
+**`botSprint:0.2806`은 설계서:775·:816에 기록된 실측 상수와 소수점까지 같다.** 이 프로젝트의
+기초 상수(진입선 0.2722 = 0.97 × 0.2806, MEET_SPEED 0.20의 근거, W60 안정성 판정의 기준)가
+16장 자율 이동이 들어온 뒤에도 변하지 않았음을 값으로 확인한 셈이다. `sonicDamage:10.0`도
+설계서 18장의 「소닉붐 고정 10」과 일치한다.
+
+**다만 `wardenChase:0.0477`은 대조할 기록이 없다.** 설계서의 워든 속도 값들(W60 평균 0.2640,
+추격 0.2766 등)은 `bot_warden_live_speed`·`bot_coldstart_dist` 계열이 생산한 것이고,
+`bot_warden_probe`의 `wardenChase`가 §6 어디에 대응하는지는 원장에도 설계서에도 적혀 있지 않다.
+이 축은 [값 없음]이며, 0.0477이 낮은 것은 워든이 그 창에서 추격 상태가 아니었을 가능성이
+크지만 **그것은 추정이지 값이 아니다.** 부채로 남긴다:
+「bot_warden_probe의 wardenChase가 §6의 어느 상수에 대응하는지 미기록」.
+
+결론: `bot_warden_probe`는 **이미 재측정된 것으로 처리한다** — 자율 이동 오염은 값으로 배제됐고
+botSprint는 기록값과 일치한다. 블록 O 재실행 명단에 중복으로 넣지 않았다.
