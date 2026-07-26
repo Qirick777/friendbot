@@ -43,6 +43,11 @@ public class BotWardenLiveSpeedTest implements BotTest {
     private double independentSpeed;
     private Vec3 measureStart;
     private int measureStartTick = -1;
+    // R-2(1) 봇 고정 잔여 변위 계측 (진단 전용, 판정에 넣지 않는다).
+    private Vec3 lastPinned;
+    private double intraTickMax;
+    private double intraTickSum;
+    private int intraTickSamples;
     // (2a) the same 60-tick trailing window the observer uses, measured independently, so a
     // long-span average and a recent-window average can be told apart.
     private final java.util.ArrayDeque<double[]> trail = new java.util.ArrayDeque<>();
@@ -125,6 +130,10 @@ public class BotWardenLiveSpeedTest implements BotTest {
         observedFlag = false;
         canKite = null;
         measureStartTick = -1;
+        lastPinned = null;
+        intraTickMax = 0;
+        intraTickSum = 0;
+        intraTickSamples = 0;
     }
 
     @Override
@@ -134,6 +143,17 @@ public class BotWardenLiveSpeedTest implements BotTest {
             return true;
         }
         bot.setHealth(bot.getMaxHealth());
+        // R-2(1): how far does the bot actually travel INSIDE a tick before being snapped back?
+        // The harness runs at ServerTickEvent(END) — after the level tick — so the bot's own tick
+        // has already moved it by the time we read this. That residue is the vibration-source
+        // candidate: if it is 0.0000 the pinned bot emits nothing for the warden to path to.
+        Vec3 pre = bot.position();
+        if (lastPinned != null) {
+            double d = Math.hypot(pre.x - lastPinned.x, pre.z - lastPinned.z);
+            intraTickMax = Math.max(intraTickMax, d);
+            intraTickSum += d;
+            intraTickSamples++;
+        }
         // The bot stays put; only the warden moves, so the observation is purely its approach.
         // Q-3: the pin is now a HOOK so a single-variable arm can release it. Default true keeps
         // this harness byte-for-byte identical in behaviour — the arm is a subclass, not an edit.
@@ -141,6 +161,7 @@ public class BotWardenLiveSpeedTest implements BotTest {
             bot.setDeltaMovement(Vec3.ZERO);
             bot.moveTo(ctx.origin.getX() + 0.5, ctx.origin.getY(), ctx.origin.getZ() + 0.5, 90.0F, 0.0F);
         }
+        lastPinned = bot.position();
         if (ctx.elapsedTicks % 40 == 0) {
             warden.increaseAngerAt(bot);
             warden.setAttackTarget(bot);
@@ -198,9 +219,10 @@ public class BotWardenLiveSpeedTest implements BotTest {
                 canKite, CombatStats.BOT_SPRINT_SPEED);
         String measured = String.format(
                 "observedSpeed:%.4f,indepWholeSpan:%.4f,indepTrailing60:%.4f,indepPathLen:%.4f,"
-                        + "liveBand:%.2f~%.2f,speedObserved:%b,canKite:%s,botSprint:%.4f",
+                        + "liveBand:%.2f~%.2f,speedObserved:%b,canKite:%s,botSprint:%.4f,intraTickMax:%.5f,intraTickMean:%.5f",
                 observedAtJudge, independentSpeed, trailingSpeed, pathSpeed, MIN_LIVE, MAX_LIVE,
-                observedFlag, String.valueOf(canKite), CombatStats.BOT_SPRINT_SPEED);
+                observedFlag, String.valueOf(canKite), CombatStats.BOT_SPRINT_SPEED,
+                intraTickMax, intraTickSamples > 0 ? intraTickSum / intraTickSamples : -1.0);
         String expected = "a MOVING warden's observed speed is non-zero and below the bot's sprint, "
                 + "and rule 1 derives canKite=true from that measurement (not from a pinned 0.0)";
         return ok ? BotTestResult.pass(measured, expected) : BotTestResult.fail(measured, expected);

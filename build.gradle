@@ -43,6 +43,12 @@ minecraft {
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            // R-4: the forked server JVM inherited the platform default US-ASCII, so every
+            // non-ASCII character in a SCENARIO / measured / expected string reached the log as
+            // '?'. 정정 9 requires a verdict line to be readable on its own — a mangled premise
+            // is not readable. 90 of 96 scenarioSpec strings are Korean, so the encoding is fixed
+            // here rather than the 90 strings being flattened to ASCII.
+            jvmArgs '-Dfile.encoding=UTF-8', '-Dsun.stdout.encoding=UTF-8', '-Dsun.stderr.encoding=UTF-8'
             // Headless verification: forward -PbottestAuto=<names> as a system property
             // to the forked server JVM so BotTestHarness can auto-run tests on start.
             if (project.hasProperty('bottestRunId')) {
