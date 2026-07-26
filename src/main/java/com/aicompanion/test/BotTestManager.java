@@ -144,7 +144,7 @@ public final class BotTestManager {
         // than buried in setup(). Empty means the harness has not stated any — which is itself the
         // finding, so it is logged as "(unstated)" instead of being silently skipped.
         String spec = test.scenarioSpec();
-        LOGGER.info("[BOTTEST] {} SCENARIO {}", test.name(),
+        LOGGER.info("[BOTTEST] {} runId={} SCENARIO {}", test.name(), RUN_ID,
                 spec == null || spec.isBlank() ? "(unstated)" : spec);
         return true;
     }
@@ -154,16 +154,31 @@ public final class BotTestManager {
      * 움직였는가」 is never an implicit premise again. IDLE:n in the histogram means 16장 평상시
      * 이동이 n틱 동안 봇을 몰았다는 뜻이다.
      */
+    /**
+     * M-1 신선도 게이트. 배치가 넘겨준 논스. 모든 [BOTTEST] 라인에 찍혀 나가므로, 완료 판정이
+     * 「하니스 이름 일치 AND 기대 N == 수신 N AND RUN_ID 일치」의 3조건이 된다.
+     *
+     * <p>04:38 사건: 앞의 두 조건을 완전히 만족시키면서 이전 세션의 라인이 통과했다. 규약에
+     * 신선도가 없었기 때문이다. RUN_ID 불일치는 PASS가 아니라 STALE이다.</p>
+     */
+    public static final String RUN_ID =
+            System.getProperty("bottest.runid", "NORUNID");
+
     private static BotTestResult withMoveOwner(BotTestResult r) {
         com.aicompanion.bot.AICompanionBot bot = com.aicompanion.bot.BotManager.current();
         if (bot == null) {
             return r;
         }
-        String extra = ",moveOwner:" + bot.moveOwnerHistogram()
+        String extra = ",moveOwnerAnomalyTicks:" + bot.moveOwnerAnomalies()
+                + ",moveOwner:" + bot.moveOwnerHistogram()
                 + ",idleOwnedTicks:" + bot.moveOwnerTicks(
                         com.aicompanion.bot.AICompanionBot.MoveOwner.IDLE)
                 + ",pickupOwnedTicks:" + bot.moveOwnerTicks(
-                        com.aicompanion.bot.AICompanionBot.MoveOwner.PICKUP);
+                        com.aicompanion.bot.AICompanionBot.MoveOwner.PICKUP)
+                // M-3: branch-entry is not autonomous movement. idleCommandedTicks counts only the
+                // ticks where 16장 actually issued a goal/stop; with no user it is 0 by construction.
+                + ",idleCommandedTicks:" + bot.idle().commandedTicks()
+                + ",pickupFetching:" + bot.pickup().isFetching();
         return r.pass() ? BotTestResult.pass(r.measured() + extra, r.expected())
                 : BotTestResult.fail(r.measured() + extra, r.expected());
     }
@@ -389,9 +404,11 @@ public final class BotTestManager {
 
         String verdict = r.pass() ? "PASS" : "FAIL";
         // Authoritative judgment line (R.2 format).
-        LOGGER.info("[BOTTEST] {} {} measured={} expected={}", name, verdict, r.measured(), r.expected());
+        LOGGER.info("[BOTTEST] {} {} runId={} measured={} expected={}",
+                name, verdict, RUN_ID, r.measured(), r.expected());
         if (ctx.source != null) {
-            final String msg = "[BOTTEST] " + name + " " + verdict + " measured=" + r.measured();
+            final String msg = "[BOTTEST] " + name + " " + verdict + " runId=" + RUN_ID
+                    + " measured=" + r.measured();
             ctx.source.sendSuccess(() -> Component.literal(msg), false);
         }
         active = null;

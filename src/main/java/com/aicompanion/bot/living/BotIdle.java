@@ -53,6 +53,18 @@ public class BotIdle {
 
     public enum State { WANDER, FOLLOW }
 
+    /**
+     * M-3 계측 정밀화: `moveOwner:IDLE:n`은 「마지막 else 분기가 돌았다」만 뜻한다. 유저가 없으면
+     * BotIdle은 :74-75에서 즉시 반환하므로 분기는 돌아도 **봇은 스스로 움직이지 않는다**.
+     * 두 값을 구분하지 않으면 [I] 분류가 전부 오탐이 된다 — 이 카운터는 16장이 실제로 이동을
+     * 지시한 틱만 센다(목표 설정 또는 의도적 정지).
+     */
+    private int commandedTicks;
+
+    public int commandedTicks() {
+        return commandedTicks;
+    }
+
     private State state = State.WANDER;
     private int pause;
     @Nullable
@@ -63,6 +75,7 @@ public class BotIdle {
     }
 
     public void reset() {
+        commandedTicks = 0;
         state = State.WANDER;
         pause = 0;
         wanderGoal = null;
@@ -78,6 +91,7 @@ public class BotIdle {
         if (bot.living().isSleepingInBed() || bot.living().isLyingBeside()) {
             bot.planner().stop();
             bot.mover().stop();
+            commandedTicks++;
             return;
         }
         double dist = bot.position().distanceTo(user.position());
@@ -97,6 +111,7 @@ public class BotIdle {
         }
 
         if (state == State.FOLLOW) {
+            commandedTicks++;
             // 「걸어서 따라옴(느려도) … 텔레포트 안 함」 — the goal is always a walkable position and
             // the mover does the walking. Sprint is requested only when the food bar allows it;
             // BotLiving.applySprintClamp is what actually enforces 15.1's ≤6 rule.
@@ -113,12 +128,14 @@ public class BotIdle {
         if (pause > 0) {
             pause--;
             bot.mover().stop();
+            commandedTicks++;
             return;
         }
         if (wanderGoal == null) {
             wanderGoal = pickWanderGoal(bot, user);
             if (wanderGoal != null) {
                 bot.planner().setGoal(wanderGoal);
+                commandedTicks++;
             }
             return;
         }
@@ -128,9 +145,11 @@ public class BotIdle {
             pause = WANDER_PAUSE;
             bot.planner().stop();
             bot.mover().stop();
+            commandedTicks++;
             return;
         }
         bot.planner().setGoal(wanderGoal);
+        commandedTicks++;
     }
 
     /** The block the user is standing in — a walkable A* goal, unlike the block beneath them. */

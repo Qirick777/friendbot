@@ -545,3 +545,76 @@ L-4(2)의 물음에 대한 답 — **횡이동 명령이 사실상 발행되지 
 `bot_creeper_lowfuse`는 반대로 K의 FAIL에서 PASS 3/3 canary OK로 돌아왔다. 두 하니스가 서로
 반대로 뒤집혔다 — **비결정성**이며 어느 쪽도 단독으로는 증거가 아니다. L-5의 단일 변수 확인
 (doTileDrops 되돌린 팔)은 미실행.
+
+# 블록 M — 계측 정합 계속
+
+## M-1 RUN_ID 신선도 게이트 + 빌드 락 (M-3 이전에 완료)
+
+- `BotTestManager.java:164` `RUN_ID = System.getProperty("bottest.runid","NORUNID")`.
+  판정 라인(`:404`, `:406`)과 SCENARIO 라인(`:147`)에 `runId=`를 찍는다.
+  `build.gradle:48-49`가 `-PbottestRunId`를 `-Dbottest.runid`로 전달한다.
+- 완료 판정이 3조건이 됐다: 하니스 이름 일치 AND 기대 N == 수신 N AND **RUN_ID 일치**.
+  불일치는 PASS가 아니라 **STALE**. `runlong4.sh`의 게이트가 `GATE name=… verdict=STALE …`로 찍는다.
+- **폴링으로 완료를 판정하지 않는다.** 종료 마커는 `BATCH-END <RUN_ID>`이며, 그 라인이 나오기
+  전의 어떤 중간 판독도 완료로 취급하지 않는다. 시작 마커는 `BATCH-BEGIN <RUN_ID> count=N`.
+- **기계적 락**: `runlong4.sh`가 `batch.lock`을 잡고, 존재하면 빌드를 시작하지 않는다.
+  값으로 확인함 — 락 보유 상태에서 배치 시도:
+      BUILD-REFUSED lock held by pid 99999 since 2026-07-26 07:20:45
+      exit=9
+  락 해제 후 같은 명령:
+      RUN_ID=R20260726T072045Z-3549 / BATCH-BEGIN R20260726T072045Z-3549
+- (5) 「RUN_ID 도입 이전 기록은 신선도 미확정」은 블록 L 항목 첫 줄에 이미 있다. 확인함.
+
+## M-4 계측 불변식 — 「틱당 정확히 하나」를 값으로 잠갔다
+
+`AICompanionBot.java:65` `moveOwnerNotesThisTick`, `:107` `checkMoveOwnerInvariant()`(틱 말미 호출,
+`:314`). 1이 아닌 틱만 `moveOwnerAnomalies`에 센다. `BotTestManager.java:172`가 모든 판정 라인에
+`moveOwnerAnomalyTicks:n`을 싣는다. 합이 창 길이와 맞는 것은 증명이 아니다 — 0회 틱과 2회 틱이
+상쇄되어도 합은 맞는다. **계측 자체가 유형 #8의 대상**이므로 서술이 아니라 값으로 잠근다.
+
+## M-2 유형 #12 범위 보정
+
+(1) `MoveOwner` 전체 항목: REFLEX, CREEPER, RESCUE, SURVIVAL, MELEE, RANGED, PICKUP, IDLE (8).
+    T5.1 능력 A*는 **별도 소유자가 아니다** — 목표를 실행하는 planner/mover이므로 목표를 세운
+    소유자에 귀속된다. T5.3은 이동을 지시하지 않는다(수면은 포즈만). 9장은 대상을 배정해
+    MELEE/RANGED로 나타나고, D칸은 RANGED 안이다. **빠진 주체 없음.**
+(2) 설계서 `AI_Bot_Design.md:1695` 「정정 10 — 유형 #12 범위 보정」 **21줄** 추가. 정정 8 무수정.
+(3) [I]의 근거가 「16장이 안 돈다」만 증명한다는 지적을 받아들인다. 계측을 정밀화했다 —
+    `BotIdle.commandedTicks()`(:62)는 **16장이 실제로 이동을 지시한 틱**만 센다.
+    판정 라인에 `idleCommandedTicks`로 실린다. 「자율 이동이 없었다」의 증거는 이 값이다.
+
+## M-5(3) 결정성 분류 규약
+
+설계서 `AI_Bot_Design.md:1716` 「정정 11 — 하니스 결정성 분류와 n의 근거」 **20줄** 추가.
+원칙: n=1로 닫는 하니스는 결정적임을 값으로 보인 것에 한한다. 결정성을 측정하지 않은 하니스의
+현재 기록은 **PASS가 아니라 미확정**이다. n=3이 뒤집힘을 잡지 못한다는 것이 관측 근거다.
+
+## M-7(1) rule_dcell — 회귀가 아니라 미구현이다 (bisect 불필요)
+
+D 칸의 횡이동·거리확보 명령을 발행하는 코드는 **정확히 한 곳**이다:
+
+    BotRangedCombat.java:186   bot.xxa = distanceCritical ? 1.0F : 0.0F;
+
+그 지점의 도달 조건은 (a) `BotRangedCombat.tick`이 도는 것 = **RANGED 분기**
+(`AICompanionBot.java:247`, `rangedCombat.hasTarget()` 필요), (b) `dist < bandMin`, (c) `!kiteable`.
+
+`bot_rule_dcell`의 측정 소유자 히스토그램은 **MELEE:173 / IDLE:67 — RANGED:0**이다.
+`BotRangedCombat.tick`이 한 틱도 돌지 않았으므로 **유일한 발행 지점이 도달 불가**다.
+즉 근접 컨트롤러가 대상을 쥐고 있을 때 D 칸 결정을 행동으로 옮기는 경로가 **존재하지 않는다**.
+회귀가 아니라 미구현이며, **bisect는 무의미하다.**
+
+이전 PASS의 근거를 다시 읽었다: 판정량이 `distanceCritical`(플래그)이었다. 그 플래그는
+`BotProtection`이 분기와 무관하게 세우므로, 그 PASS는 **행동이 아니라 판정을 재고 있었다.**
+지적대로다. 유형 #10.
+
+## M-6 rule2_deny는 기존 부채로 설명된다
+
+(1) §9(B) 「규칙2가 보호 계층에만 걸려 직접 교전 경로 우회(bot_melee가 meleeCombat 직접 호출)」를
+    **예측 → 확인됨**으로 갱신한다. 확인 측정값:
+    `allowMelee:false, moveOwner:MELEE:200, idleOwnedTicks:0, ticksInMeleeRange:182, damageDealt:88.6`.
+(2) 고치지 않는다. 규칙2를 근접 컨트롤러에 배선하는 것은 계층 우선순위 변경이고
+    설계서 1487행 T5.6 「계층 간 우선순위 충돌 해소」의 소관이다. **T5.6 최우선 입력**으로 표시.
+(3) `damageDealt`는 포화량이 맞다. `BotMeleeCombat.java:21` `MIN_ATTACK_INTERVAL = 13`틱이므로
+    182틱 근접권 체류에서 타격 횟수는 ⌊182/13⌋≈14로 상한이 걸린다. K→L에서 접근량이
+    12.04→15.42(+28%)로 변했는데 damageDealt는 88.6으로 **소수점까지 동일**한 것이 포화의 증거다.
+    규칙2 위반의 크기 지표를 `ticksInMeleeRange`로 교체한다(하니스 측정 정의 수정, 배치 종료 후 적용).

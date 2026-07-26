@@ -57,6 +57,17 @@ public class AICompanionBot extends ServerPlayer {
 
     private final int[] moveOwnerTicks = new int[MoveOwner.values().length];
     private MoveOwner lastMoveOwner = MoveOwner.IDLE;
+    /**
+     * M-4 계측 불변식: 틱당 정확히 1회 기록. 합이 창 길이와 맞는 것은 증명이 아니다 — 어떤 틱이
+     * 0회, 다른 틱이 2회여도 합은 맞는다. 이 카운터는 1이 아닌 틱만 센다. 계측 자체가 유형 #8의
+     * 대상이므로, 히스토그램의 정당성을 서술이 아니라 값으로 잠근다.
+     */
+    private int moveOwnerNotesThisTick;
+    private int moveOwnerAnomalies;
+
+    public int moveOwnerAnomalies() {
+        return moveOwnerAnomalies;
+    }
 
     public int moveOwnerTicks(MoveOwner o) {
         return moveOwnerTicks[o.ordinal()];
@@ -68,6 +79,7 @@ public class AICompanionBot extends ServerPlayer {
 
     public void resetMoveOwnerCounters() {
         java.util.Arrays.fill(moveOwnerTicks, 0);
+        moveOwnerAnomalies = 0;
     }
 
     /** Compact histogram for the verdict line, e.g. "IDLE:180,MELEE:60". Zero buckets omitted. */
@@ -88,6 +100,14 @@ public class AICompanionBot extends ServerPlayer {
     private void noteMoveOwner(MoveOwner o) {
         lastMoveOwner = o;
         moveOwnerTicks[o.ordinal()]++;
+        moveOwnerNotesThisTick++;
+    }
+
+    /** Called at the very end of the tick: exactly one owner must have been recorded. */
+    private void checkMoveOwnerInvariant() {
+        if (moveOwnerNotesThisTick != 1) {
+            moveOwnerAnomalies++;
+        }
     }
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
@@ -180,6 +200,8 @@ public class AICompanionBot extends ServerPlayer {
 
     @Override
     public void tick() {
+        // M-4: count this tick's owner notes; anything other than exactly 1 is an anomaly.
+        moveOwnerNotesThisTick = 0;
         // Perception (T3.1): snapshot all facts first, so every layer sees the same tick.
         perception.gather(this);
         // Phase 3+ inserts: reflex → decision here (consume perception).
@@ -288,6 +310,8 @@ public class AICompanionBot extends ServerPlayer {
         // Drive passenger positioning (T4.5): the fake-player passenger's own rideTick may not run,
         // so glue it to the bot's head here every tick — after the bot has moved.
         rescue.positionPassengers(this);
+
+        checkMoveOwnerInvariant();
 
         // Look control runs last so the head yaw/pitch it writes are the tick's final state
         // (vanilla's tickHeadTurn adjusts only yBodyRot, never yHeadRot). Ranged combat owns the
