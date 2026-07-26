@@ -1637,3 +1637,190 @@ T5.6 기준선 실행 전에 정해야 한다. **판정 라인 인코딩(B-7)**,
 **DIRTY 2중 탐지(B-9)**. 그리고 [BROKEN]에 `bot_protect_intervene`을 추가했다(R-1(2)).
 `bot_warden_live_speed`는 [BROKEN]에 남기되 **「사상자」 서술을 철회**했다 — 지금 PASS이며
 문제는 하니스가 아니라 시드다.
+
+# T5.6-A — 준비 확정 + 첫 배선
+
+배치 RUN_ID `P20260726T124207Z-7293`, spec 22개 / 26 실행. 게이트 4조건 통과
+(`TREE-BEGIN == TREE-END = e14930df…:da39a3ee…:24b71de1…`). 전문 `docs/bottest_gate_t56A.txt`.
+
+## A-0 임계표·게이트 목록 문서화
+
+설계서 R.2에 **정정 18**(확정 게이트 임계표, 분모 정의, 산술 근거, 「두 임계가 후퇴 판단선이라는
+하나의 다이얼을 양쪽에서 조인다」는 설계 의도, 도주를 분모에서 빼면 구조가 무너진다는 이유)을
+추가했다. 실측에서 역산하지 않았음을 명시했다.
+게이트 정본은 **`docs/t56_gates.md`** — 8개 전부의 정의와 닫힘 근거 값. 2·5·6의 정의는
+사용자가 A-0(3)에서 확정해 준 것을 그대로 옮겼다.
+
+## A-1 고정 시드 3개 (설계서 정정 19)
+
+`20260726001 / 20260726002 / 20260726003`. 러너가 `run/server.properties`의 `level-seed`를 박고,
+매니저는 **그 파일을 믿지 않고** `ServerLevel.getSeed()`를 SCENARIO와 모든 판정 라인에 찍는다.
+게이트 라인에도 `seed=`가 실린다 — 이번 배치 26 실행 전부 확인됐다.
+
+### A-1(4) 두 앵커 3시드 재측정 — 낙관 값을 쓰지 않았다
+
+    앵커              설계서       s1        s2        s3        채택(최악)   마진
+    W60 워든 평균     0.2640      0.2638    0.2643    0.2652    0.2652      5.92% -> 5.49%
+    실동 최악값       0.2658      0.2658    0.2658    0.2658    0.2658      5.27% (유지)
+
+실동 앵커는 세 시드 전부 정확히 0.2658 — **시드 의존이 없다.** R-2가 남긴 「전제 불일치」와
+「월드 의존」 우려 중 이 앵커에 대해서는 후자가 기각된다. W60 앵커는 최악이 0.2652여서 마진이
+5.92% → **5.49%**로 좁아진다. 설계서는 고치지 않았고 `docs/t56_gates.md`에 표로 실었다.
+
+### 곁가지 — 좀비 창별 sd 무효화 건의 원인이 닫혔다
+
+같은 코드에서 시드만 바꾼 W60 좀비 sd: **s1 0.0130, s2 0.0014, s3 0.0007** (설계서 기록 0.0010).
+**19배 차이가 시드만으로 난다.** 설계서 값은 s2·s3 계열이고 블록 O의 0.0098은 s1 계열이다.
+원인은 R1 정정이 아니라 **월드 의존**이었고, P-3에서 후보로 올렸던 `moveOwner:REFLEX:196`은
+기각된다 — **R1 억제 팔은 불필요하다.** 워든 행(0.0041/0.0032/0.0019 vs 기록 0.0038)은 세 시드
+모두 기록값과 같은 자릿수이므로 W60 채택 근거는 처음부터 흔들리지 않았다.
+
+## A-2 aggroDrop — 네 지적이 맞고, 내 강조점이 틀렸다
+
+### A-2(1) 97.4는 성능 상한이 아니라 **계측 산물**이다
+
+`BotProtectInterveneTest.java:171-172`:
+`if (aggro != null && aggro.isAlive()) { aggroMinHp = Math.min(aggroMinHp, aggro.getHealth()); }`
+
+**몹이 죽으면 폴링이 멈춘다.** `aggroMinHp`는 0이 아니라 **마지막으로 살아 있던 표본**에서 얼어붙고,
+`aggroDrop = 100 − 2.6 = 97.4`가 그 값이다. 몹 최대체력은 100이므로 진짜 상한은 100인데
+이 지표는 **97.4 위로 올라갈 수 없다.** 「빨리 죽였다」와 「간신히 죽였다」를 구분하지 못한다.
+필드 이름은 「어그로 몹에게 준 피해」인데 계산식은 「살아 있는 동안 표본된 피해」다 — **유형 #8**이다.
+이 프로젝트에서 세 번째다: 회피 분모, `damageDealt`(MIN_ATTACK_INTERVAL 포화), `aggroDrop`.
+
+### A-2(3) 8번 트라이얼 — 개입은 일어났다. 짧았을 뿐이다
+
+10 트라이얼 전건(`engagePathTicks` → `aggroDrop`):
+
+    t1 145->44.3   t2 192->70.8   t3 231->97.4   t4 218->97.4   t5 206->97.4
+    t6 145->44.3   t7 106->44.3   t8  39-> 0.0   t9 219->97.4   t10 219->97.4
+
+**`aggroDrop`은 개입 지속 시간의 계단 함수이고 ~206틱에서 포화된다.** 그리고 8번 트라이얼은
+`engagePathTicks:39, modeEngageTicks:39, modeNoneTicks:201, aggroInInvadeRadiusTicks:38`이다 —
+**개입 경로는 돌았다.** 「개입이 아예 일어나지 않는다」가 아니라 **「개입이 39틱 만에 끊겼다」**이며,
+39틱은 `MIN_ATTACK_INTERVAL=13`의 3배로 타격 한 번 넣기도 빠듯하다.
+
+**진짜 발견은 이것이다: 개입 지속 시간이 39~231틱으로 6배 갈린다.** 목표 1에 직결된다.
+
+무엇이 트라이얼마다 다른가: **하니스에는 난수가 없다**(`grep random|nextInt` 0건, 몹 배치 고정).
+10 트라이얼은 같은 월드를 공유하므로 지형도 같다. 남는 것은 `Level.random`이 트라이얼 간에
+리셋되지 않고 계속 진행한다는 사실이며, 바닐라 좀비 AI가 그것을 소비한다. 즉 트라이얼은
+**독립 표본이 아니라 하나의 난수열을 이어 받는 수열**이다 — 통계 판정에 들어갈 사실이다.
+
+### A-2(2) 판정량을 갈랐다
+
+`intervened:%b`(이진)와 `engageDurTicks:%d`를 measured 맨 앞에 싣고 HP 델타를 뒤로 내렸다.
+통과 조건은 바꾸지 않았다(A-2(5)).
+
+### A-2(4) [UNDERPOWERED] 신설 — 재분류한다
+
+    [UNDERPOWERED] bot_protect_intervene
+      이전 PASS 3/3(K·L·O)은 표본 부족으로 미확정이었고, 현재 값이 실제 분포다.
+      9/10 분포에서 n=3이 3/3을 뽑을 확률 0.9^3 = 0.73, 세 번 연속 0.39 — 놀랍지 않다.
+      코드가 깨진 것이 아니다. 블록 R에서 [INVALIDATES]로 붙인 라벨을 철회한다.
+
+두 태그의 구분은 설계서 R.2 **정정 20**에 규약으로 등록했다 —
+[INVALIDATES]는 **코드·전제 변경**으로 이전 값이 재현되지 않는 경우에만 쓴다.
+
+**이번 배치에서는 10/10 PASS다**(engageDurTicks 136~233, 39틱 꼬리가 나오지 않았다).
+즉 3/3도 10/10도 이 하니스의 분포를 확정하지 못한다 — T5.6-C의 n=100 대상이다.
+
+## A-3 로그 판독 경로
+
+**(1) 순서**: 복사는 `run_one` 끝(서버 종료 직후)이고 `rm -rf run/world`는 **다음** `run_one` 시작이다.
+게다가 `run/logs`는 `run/world` 밖이라 wipe가 애초에 닿지 않는다. 순서를 코드에 주석으로 고정했다.
+**(2) 음성 케이스**: 존재하지 않는 이름 `bot_nonexistent_negative_case`를 배치에 넣었다.
+`GATE name=bot_nonexistent_negative_case verdict=MISSING runId=- reason=no_verdict_line_or_empty_log`
+— **PASS를 내지 않는다.** 값으로 확인됐다.
+**(3) 한글 온전성 3건 실행 확인**:
+
+    bot_rule2_deny             SCENARIO seed=20260726001 … | 6.3 규칙2(근접 허용) 행동 판…
+    bot_warden_live_speed_s1   SCENARIO seed=20260726001 … | 봇 최대체력 400 + 매 틱 만피 …
+    bot_protect_intervene      SCENARIO seed=20260726001 … | user invulnerable at full hp (>40% …
+
+셋 중 둘은 한글이 온전하다. 셋째(`bot_protect_intervene`)는 원문이 영어이고 그 안의 「9.2」 앞
+한글 조각 하나만 포함하는데, 그 지점에서 잘렸다 — 이 하니스의 spec은 블록 J에서 손으로 쓴 것이라
+영어 문장 중간에 한글이 섞여 있다. **90이름 전수 확인은 아니며, 나머지는 정적 확인으로 남긴다.**
+**(4) [BROKEN] 명단은 §아래에 다시 낸다.**
+
+## A-4 규칙2 근접 배선 — 배선했고, 스펙 충돌을 만났다
+
+### A-4(1) 배선
+
+`BotMeleeCombat.tick`이 **접근·타격 전에** 규칙2를 확인한다. 대상이 인지 목록에 없으면
+**fail-open**하고 `rule2Unknown`으로 따로 센다 — 인지 지연을 규칙2 판정으로 오인하면 근접이
+조용히 죽는다. 보호 계층 배선은 제거하지 않았다.
+
+### 스펙 충돌 — 여기서 멈추고 기록한다 (진행 규칙 예외 (a))
+
+`BotProtection.java:187-202`는 규칙2가 거부해도 **원거리 수단이 없으면 「그래도 교전한다」**를
+의도적으로 선택하고, 그 근거를 값과 함께 코드에 적어 두었다 —
+「gating intervention on rule 2 produced aggroDrop 97.4 → 0.0 … i.e. the bot stood still while the
+user was hit」. 근접 컨트롤러에서 무조건 막으면 그 결정이 무력화되고 **목표 1이 깨진다.**
+
+그래서 게이트를 **보호 계층이 명시적으로 무효화할 수 있는** 형태로 넣었다. 그 결과가 이것이다:
+
+    bot_rule2_deny  FAIL 0/10
+      allowMelee:false, botApproachSum:11.59, ticksInMeleeRange:182, damageDealt:88.6
+      rule2Denied:0, rule2Allowed:200, rule2Unknown:0, lastRule2:override(protection)
+
+**게이트가 그 하니스에는 도달하지 않는다.** 이 하니스는 `TestUser`를 띄우므로 보호 계층이 살아
+있고, 활이 없으므로 「그래도 교전」 분기가 매 틱 오버라이드를 건다. 값은 배선 이전과 **동일하다**
+(182틱, 88.6). 즉 M-6의 결함은 이 경로에서 **여전히 미해소**다.
+
+**두 요구가 실제로 충돌한다**: 「규칙2가 직접 교전 경로를 게이트한다」와 「보호 계층은 져도
+개입한다」. 어느 쪽을 이기게 할지는 `BotProtection`의 주석이 이미 **T5.6의 「계층 간 우선순위
+충돌 해소」**로 미뤄 둔 사안이다. **내가 정하지 않는다.** 배선은 넣되 우선순위 결정은 올린다.
+
+### A-4(2)(3) 반대 케이스와 게이트가 실제로 도달한 곳
+
+    bot_rule2_allow  PASS 10/10
+      allowMelee:true, botApproachSum:6.12, ticksInMeleeRange:44, damageDealt:17.7,
+      targetHp:20->2, rule2Denied:0, rule2Allowed:63, lastRule2:allow
+    → 허용 팔에서 교전은 정상 성립한다. 게이트가 정상 통과를 막지 않는다.
+
+    [INVALIDATES] bot_melee  (PASS 3/3 -> FAIL 0/3, 원인은 이번 A-4 배선)
+      hits:0, maxHit:0.00, hpDrop:0.0, moveOwner:MELEE:380
+    → 이 하니스는 TestUser가 없어 보호 계층이 없고, 따라서 오버라이드도 없다.
+      게이트가 실제로 발화해 2000hp 더미에 대한 접근·타격을 전부 막았다.
+      **게이트는 작동한다.** 그리고 이 FAIL은 블록 J가 이미 「부적절한 전제」로 적어 둔
+      더미 최대체력 2000이 규칙2를 거부로 몰기 때문이다 — 규칙2 입장에서 2000hp는 못 이기는 상대다.
+      코드 변경이 원인이므로 [UNDERPOWERED]가 아니라 [INVALIDATES]다(정정 20).
+
+### A-4(4) 거부 후 봇의 상태 — 값으로 기록
+
+거부 틱에 봇은 `zza=0, xxa=0, sprint=false`로 **선다.** 폴백은 구현하지 않았다(지시대로).
+`bot_melee`의 값이 그 상태다 — `moveOwner:MELEE:380`(분기는 380틱 소유), `hits:0`, `hpDrop:0.0`.
+**설계서:940이 적은 결말 그대로다**: 「봇은 카이팅도 근접도 하지 않은 채 서 있게 된다」.
+이것이 A-5(D칸 발행 경로)와 「원거리 강제 폴백」의 입력이다.
+
+### A-4(5) 회귀 확인 — 분모 대조
+
+분모는 `BotTestRegistry` 등록 이름 **96**(정정 17 규약). 게이트가 도달할 수 있는 경로는
+`BotMeleeCombat.tick`이 대상을 쥐고 도는 하니스뿐이며, 코드로 추린 결과 **직접 `meleeCombat().setTarget`
+호출 8종** + 보호 계층 경유로 MELEE 소유가 관측된 11종 = **19종**을 재실행했다.
+**96 중 19를 실행했고 77은 실행하지 않았다** — 나머지는 근접 컨트롤러에 대상이 실리지 않는다는
+코드 근거로 제외했으며, 이는 논증이지 값이 아니다(T5.6-C 전량 실행에서 닫힌다).
+
+    PASS 15  bot_kite_approach bot_live_eat bot_live_eat_combat bot_pickup_combat
+             bot_pickup_gift bot_survival bot_protect_unarmed bot_protect_lowuser
+             bot_protect_highuser bot_protect_priority bot_escape_none bot_survival_heal
+             bot_rescue_heal bot_rule2_allow bot_protect_intervene
+    FAIL  4  bot_melee(신규, 위 [INVALIDATES])  bot_rule2_deny(기존 미해소)
+             bot_rule_dcell(기존 미구현)  bot_pickup_natural(기존, 유형 #12)
+
+**신규 회귀는 `bot_melee` 하나뿐이고 원인이 특정돼 있다.**
+
+## [BROKEN] 현재 명단 (A-3(4))
+
+    bot_kite_execmon      FAIL   알려진 결함 재현. 술어 변경은 T5.6에서 승인 하에(I-3)
+    bot_rule_dcell        FAIL   미구현. 발행 경로 신설이므로 수리가 아니라 추가(I-2)
+    bot_rule2_deny        FAIL   보호 계층 오버라이드로 게이트 미도달. 우선순위 결정 대기(A-4 충돌)
+    bot_melee             FAIL   A-4 배선의 직접 결과 + 2000hp 전제. 전제 교정과 함께 T5.6에서
+    bot_pickup_natural    FAIL   유형 #12(배회가 아이템 위를 지나감). 기존
+    bot_window_variance   PASS   하니스는 통과. 좀비 행 기록값 무효였으나 **원인이 시드 의존으로
+                                 닫혔고**(A-1 곁가지) 재측정은 T5.6-C 3시드 실행으로 흡수
+    bot_warden_live_speed PASS   3시드 전부 PASS(0.2658). 「사상자」 서술은 R에서 철회했고
+                                 이번 3시드로 확정 — 문제는 하니스가 아니라 시드였다
+
+`bot_window_variance`와 `bot_warden_live_speed`는 이제 [BROKEN]이 아니다. 위 표에 상태만 남긴다.

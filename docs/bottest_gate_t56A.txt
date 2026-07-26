@@ -1,0 +1,32 @@
+RUN_ID=P20260726T124207Z-7293
+TREE-BEGIN e14930df86fad4067abd516f2320463b1e830b78:da39a3ee5e6b4b0d3255bfef95601890afd80709:24b71de1e37dcc8c232f52957480b6e7760471a6
+BATCH-BEGIN P20260726T124207Z-7293 count=22
+TREE-END e14930df86fad4067abd516f2320463b1e830b78:da39a3ee5e6b4b0d3255bfef95601890afd80709:24b71de1e37dcc8c232f52957480b6e7760471a6
+=== VERDICTS (gated: name AND N AND RUN_ID AND NOT-DIRTY) ===
+GATE name=bot_warden_live_speed_s1 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_warden_live_speed_s2 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726002
+GATE name=bot_warden_live_speed_s3 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726003
+GATE name=bot_window_variance_s1 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_window_variance_s2 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726002
+GATE name=bot_window_variance_s3 verdict=PASS runId=P20260726T124207Z-7293 seed=20260726003
+GATE name=bot_protect_intervene verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_rule2_deny verdict=FAIL runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_rule2_allow verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_nonexistent_negative_case verdict=MISSING runId=- reason=no_verdict_line_or_empty_log
+GATE name=bot_melee verdict=FAIL runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_kite_approach verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_live_eat verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_live_eat_combat verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_pickup_combat verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_pickup_gift verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_pickup_natural verdict=FAIL runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_survival verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_rule_dcell verdict=FAIL runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_protect_unarmed verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_protect_lowuser verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_protect_highuser verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_protect_priority verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_escape_none verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_survival_heal verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+GATE name=bot_rescue_heal verdict=PASS runId=P20260726T124207Z-7293 seed=20260726001
+BATCH-END P20260726T124207Z-7293
