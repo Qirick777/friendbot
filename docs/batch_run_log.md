@@ -618,3 +618,17 @@ D 칸의 횡이동·거리확보 명령을 발행하는 코드는 **정확히 �
     182틱 근접권 체류에서 타격 횟수는 ⌊182/13⌋≈14로 상한이 걸린다. K→L에서 접근량이
     12.04→15.42(+28%)로 변했는데 damageDealt는 88.6으로 **소수점까지 동일**한 것이 포화의 증거다.
     규칙2 위반의 크기 지표를 `ticksInMeleeRange`로 교체한다(하니스 측정 정의 수정, 배치 종료 후 적용).
+
+## 블록 M-3 — [I] 46종 재실행 (RUN_ID 게이트 하)
+
+RUN_ID R20260726T072157Z-4478. BATCH-BEGIN 07:21:57Z → BATCH-END 08:33Z, 52 이름, 약 71분.
+게이트 산출 전문: docs/bottest_gate_blockM3.txt (52 GATE 라인).
+STALE 0, MISSING 0. PASS 48, FAIL 4.
+
+핵심 값 — 계측이 실린 49개 판정 라인 전부 idleCommandedTicks:0, moveOwnerAnomalyTicks:0.
+그중 40개는 idleOwnedTicks>0이다. 두 값을 구분하지 않았으면 [I] 46종 중 대부분이 오탐으로
+재분류될 뻔했다. 상세는 docs/bot_motion_sweep.md §6.
+
+FAIL 4건: bot_path_blocked([INVALIDATES], canary MISMATCH — 격리 결함, bot_creeper_wall과 동일 서명),
+bot_persist_load / bot_dodge / bot_kite_execmon (이전 PASS 기록 없음 → 최초 기록).
+bot_kite_execmon은 설계서:958 서술과 하니스 expected가 충돌한다 — 스펙 충돌로 기록만 하고 멈춘다.

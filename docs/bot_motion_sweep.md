@@ -151,3 +151,72 @@ BotWindowVarianceTest, DummyTest
 두 하니스가 서로 반대로 뒤집힌 것은 **비결정성**을 뜻한다 — 어느 쪽 결과도 단독으로는 증거가 아니다.
 크리퍼 폭발이 남기는 블록 상태가 트라이얼마다 다르며, K-7의 `doTileDrops=false`가 후보다.
 L-5의 단일 변수 확인(doTileDrops를 되돌린 팔)은 아직 실행하지 않았다.
+
+## 6. M-3 — [I] 46종을 논증이 아니라 값으로 재확인
+
+RUN_ID `R20260726T072157Z-4478`, BATCH-BEGIN 2026-07-26 07:21:57Z, BATCH-END 08:33Z, 52 이름.
+게이트 3조건(이름 일치 AND 기대 N == 수신 N AND RUN_ID 일치) 통과: STALE 0, MISSING 0, 52/52 신선.
+
+### 6.1 [I] 판정의 근거가 논증에서 값으로 바뀌었다
+
+`idleCommandedTicks`(BotIdle.java:62)는 16장이 **실제로 목표를 놓거나 정지를 지시한** 틱만 센다.
+`idleOwnedTicks`는 「마지막 else 분기가 돌았다」만 뜻한다. 둘은 다른 값이다.
+
+계측이 실린 49개 판정 라인 **전부** `idleCommandedTicks:0`.
+그중 40개는 `idleOwnedTicks > 0`이다 (최대 574, `bot_warden_probe`).
+
+즉 §2의 논증 「`user == null`이면 `BotIdle.java:87-89`에서 즉시 반환한다」는 값으로 확인됐다.
+동시에, **`idleOwnedTicks`만 봤다면 49개 중 40개가 오탐으로 [II]에 재분류될 뻔했다.**
+M-3이 실제로 회수한 것은 [I] 46종의 유효성이 아니라 **[I]을 재는 자의 눈금**이다.
+
+`idleOwnedTicks == 0`인 9종 (전투 분기가 창 전체를 소유): bot_live_eat_combat, bot_melee,
+bot_pearl, bot_ranged, bot_shield, bot_survival, bot_warden_band, bot_warden_band_above,
+bot_warden_band_below.
+
+### 6.2 계측 불변식 (M-4)
+
+`moveOwnerAnomalyTicks:0` — 49개 라인 전부. `bot_dodge`의 50 트라이얼 각각도 전부 0.
+틱당 소유자는 정확히 하나였다. 계측 자체는 자기 모순을 내지 않았다.
+
+### 6.3 계측이 실리지 않은 3건 — sweep §1의 「**모든** 판정 라인」은 과장이었다
+
+dummy, bot_death, bot_persist_load 의 판정 라인에는 moveOwner 필드가 없다.
+`BotTestManager.java:169` `if (bot == null) { return r; }` 때문이다.
+셋 다 판정 시점에 봇이 존재하지 않는다 (dummy는 봇을 안 만들고, bot_death는 `botExists:false`가
+판정 대상이며, bot_persist_load는 `restored:false`로 실패했다). 코드상 필연이며 누락이 아니다.
+정확한 수치는 49/52다. sweep §1의 문장을 정정한다 — **삭제하지 않고 여기에 덧붙인다.**
+
+### 6.4 FAIL 4건
+
+    [INVALIDATES] bot_path_blocked
+      직전 기록: docs/bottest_lines_blockK.txt:39  03:51:45  PASS trials:3,passed:3,canary:OK
+      지금:      FAIL trials:3,passed:1,successRate:0.33,wilson95Lower:0.061,canary:MISMATCH x2
+                 t1:P(pathNull:true,expansions:8000)
+                 t2:F(canary:MISMATCH(coreBlocks changed:3 first(+5,+3,-7) id 412->416))
+                 t3:F(canary:MISMATCH(coreBlocks changed:5 first(+5,+2,-7) id 412->408))
+      t1 자체는 이전과 같은 값(pathNull:true, expansions:8000)을 냈다. 무너진 것은 **판정이 아니라
+      격리**다. 서명은 `bot_creeper_wall`(§5, id 276->280)과 동일하다: coreBlocks가 트라이얼 간
+      복원되지 않고 블록 id가 단조 증가한다. 두 하니스는 같은 결함 하나를 보고 있다.
+
+FAIL 3건은 **이전 PASS 기록이 없다.** docs/bottest_lines_blockK.txt(85 라인/48 하니스),
+docs/batch_run_log.md, AI_Bot_Design.md 어디에도 판정값이 없다. 회귀라고 부를 근거가 없으므로
+무효화가 아니라 **최초 기록**으로 남긴다.
+
+    bot_persist_load  FAIL  restored:false,uuidMatch:false,uuid:none
+      expected=restored AND uuid==c40b4e54-5cf9-33de-bc69-a435d5c9462d
+      짝인 bot_persist_save는 PASS. 저장은 되고 복원이 안 된다. T0.3(설계서:1259 「영속 저장」)의
+      절반이 값으로 미검증 상태였다는 뜻이다.
+
+    bot_dodge  FAIL  trials:50,passed:18,successRate:0.36,wilson95Lower:0.241  canary:OK
+      expected=95% Wilson lower >= 0.65 (스크리닝 티어; 스펙 0.80)
+      arrows:4는 50트라이얼 전부 동일 — 자극은 결정적으로 들어갔다. hits가 0/1/2/3으로 갈린다.
+      lateral은 2.17~17.21로 흩어진다. canary OK이므로 §5의 격리 결함과는 다른 원인이다.
+      T4.2(설계서:1379 「투사체 회피」, :1499 「회피: 공격 후 봇 체력 불변」)의 대표 하니스다.
+
+    bot_kite_execmon  FAIL  execMonitorFired:false,ticksToExec:-1,gapAtFlee:0.91,gapClosed:0.57,
+      hpLostTotal:23.7,intentOpenTicks:224,maxFailingTicks:3,failingTicksTotal:116
+      expected=A의 게이트를 우회시킨 상태에서 B가 20틱 안에 잡아야 한다
+      설계서:958은 이 하니스를 「대상이 이미 밀착 … 간격이 실제로 좁혀짐: **아니오** … hp 15.7 손실」로
+      적고 있다. 하니스의 expected와 설계서의 서술이 서로 다른 것을 말한다 —
+      **스펙 충돌 후보다. 여기서 멈추고 기록만 한다(진행 규율 예외 (a)).**
+      직전 기록 hp 15.7 대비 지금 23.7. 둘 다 봇 최대체력 200 전제(batch_run_log.md:301)다.
