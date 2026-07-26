@@ -33,10 +33,38 @@ public final class BotPathfinder {
     private static final int DROP_COST = 3;      // per block of a safe drop
     private static final int RISKY_DROP_COST = 60; // flat penalty for drops beyond maxSafeFall
     private static final int MAX_SAFE_FALL = 3;
+    /** Same value, exposed so callers can build a snapshot without duplicating the constant. */
+    public static final int MAX_SAFE_FALL_PUBLIC = MAX_SAFE_FALL;
     private static final int MAX_FALL_SEARCH = 8; // beyond this a drop is a lethal cliff (forbidden)
     private static final int DEFAULT_MAX_EXPANSIONS = 8000;
 
     private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+    // --- T5.1 능력 인식 A* (design 4.4) --------------------------------------------------------
+    /** Extra cost for an MLG water landing: possible, but 「가능하지만 비싸게」 (4.4 특수 이동 비용). */
+    private static final int WATER_DROP_COST = 40;
+    /** Boat landings are slower to set up than a bucket, so they cost more. */
+    private static final int BOAT_DROP_COST = 70;
+    /** Per-block pillar-up cost: placing and jumping is slow, so a walkable detour should win. */
+    private static final int PILLAR_COST = 45;
+    /** A bucket saves any fall the search will consider; a boat is for the big ones. */
+    private static final int WATER_FALL_LIMIT = 8;
+    private static final int BOAT_MIN_FALL = 4;
+    /** Max blocks the bot will stack in one pillar-up. */
+    private static final int PILLAR_MAX = 3;
+
+    /** Action tags left on path nodes; the executors, not the search, carry them out (4.4). */
+    public static final String TAG_WATER = "water";
+    public static final String TAG_BOAT = "boat";
+    public static final String TAG_PLACE = "place";
+
+    /**
+     * Capability snapshot handed to the search (design 4.4 「경로 요청 시 능력 스냅샷을 A*에 넘긴다」).
+     * What the bot is carrying changes which paths exist.
+     */
+    public record Capabilities(boolean waterBucket, boolean boat, int cheapBlocks, int maxSafeFall) {
+        public static final Capabilities NONE = new Capabilities(false, false, 0, MAX_SAFE_FALL);
+    }
 
     private BotPathfinder() {
     }
@@ -124,6 +152,20 @@ public final class BotPathfinder {
         @Nullable
         private List<BlockPos> result;
 
+        private Capabilities caps = Capabilities.NONE;
+        private final Map<Long, String> actionTags = new HashMap<>();
+
+        /** Action tag for a node on the returned path, or null for an ordinary step. */
+        @Nullable
+        public String actionTagAt(BlockPos p) {
+            return actionTags.get(p.asLong());
+        }
+
+        public Search withCapabilities(Capabilities c) {
+            this.caps = c == null ? Capabilities.NONE : c;
+            return this;
+        }
+
         public Search(Level level, BlockPos start, BlockPos goal, int maxExpansions) {
             this.level = level;
             this.maxExpansions = maxExpansions;
@@ -201,15 +243,41 @@ public final class BotPathfinder {
                     relax(cur, up, BASE_COST + STEP_UP_COST);
                     continue;
                 }
-                // drop: front column must be clear to walk off, land on first standable below
+                // Ascent (4.4 상승 규칙): a 2+ block wall is impassable on foot, but with cheap
+                // blocks the bot can pillar up. Tagged "place"; the structure placer executes it.
+                if (!standable(level, up) && caps.cheapBlocks() > 0
+                        && blocked(level, cur.pos.offset(d[0], 1, d[1]))) {
+                    for (int h = 2; h <= PILLAR_MAX; h++) {
+                        BlockPos top = cur.pos.offset(d[0], h, d[1]);
+                        if (standable(level, top) && !blocked(level, cur.pos.above(h + 1))
+                                && caps.cheapBlocks() >= h) {
+                            relax(cur, top, BASE_COST + PILLAR_COST * h);
+                            actionTags.put(top.asLong(), TAG_PLACE);
+                            break;
+                        }
+                    }
+                }
+
+                // Descent (4.4 하강 규칙). Front column must be clear to walk off; land on the first
+                // standable block below. What is PASSABLE depends on the capability snapshot:
+                //   N <= maxSafeFall            → free
+                //   N <= water limit + bucket   → allowed, MLG cost, "water" tag
+                //   N large    + boat           → allowed, boat cost, "boat" tag
+                //   otherwise                   → FORBIDDEN (4.4 「그 외 → 금지(낙사)」)
                 if (!blocked(level, flat) && !blocked(level, flat.above())) {
                     for (int k = 1; k <= MAX_FALL_SEARCH; k++) {
                         BlockPos down = cur.pos.offset(d[0], -k, d[1]);
                         if (standable(level, down)) {
-                            int cost = (k <= MAX_SAFE_FALL)
-                                    ? BASE_COST + k * DROP_COST
-                                    : BASE_COST + RISKY_DROP_COST;
-                            relax(cur, down, cost);
+                            if (k <= caps.maxSafeFall()) {
+                                relax(cur, down, BASE_COST + k * DROP_COST);
+                            } else if (caps.waterBucket() && k <= WATER_FALL_LIMIT) {
+                                relax(cur, down, BASE_COST + WATER_DROP_COST);
+                                actionTags.put(down.asLong(), TAG_WATER);
+                            } else if (caps.boat() && k >= BOAT_MIN_FALL) {
+                                relax(cur, down, BASE_COST + BOAT_DROP_COST);
+                                actionTags.put(down.asLong(), TAG_BOAT);
+                            }
+                            // else: lethal without a capability → not a neighbour at all.
                             break;
                         }
                         if (blocked(level, down)) {

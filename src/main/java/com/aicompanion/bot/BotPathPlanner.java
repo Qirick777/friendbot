@@ -72,7 +72,8 @@ public class BotPathPlanner {
         // 1) Search (incremental, tick-split).
         if (path == null) {
             if (search == null) {
-                search = new BotPathfinder.Search(level, bot.blockPosition(), goal, MAX_EXPANSIONS);
+                search = new BotPathfinder.Search(level, bot.blockPosition(), goal, MAX_EXPANSIONS)
+                .withCapabilities(snapshot(bot));
             }
             search.step(EXPANSIONS_PER_TICK);
             if (search.isDone()) {
@@ -90,6 +91,32 @@ public class BotPathPlanner {
 
         // 2) Follow the path via the movement executor.
         followPath(bot);
+    }
+
+    /**
+     * Capability snapshot from the live inventory (design 4.4). The paths that exist depend on what
+     * the bot is carrying: a bucket makes a lethal drop into a costly one, cheap blocks make a wall
+     * into a pillar. Cheap-block selection reuses the equipment manager's stock count, which already
+     * applies the high-value exclusion rule (4.4 「고가치 제외」).
+     */
+    private static BotPathfinder.Capabilities snapshot(AICompanionBot bot) {
+        var inv = bot.getInventory();
+        boolean water = false;
+        boolean boat = false;
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            var st = inv.getItem(i);
+            if (st.isEmpty()) {
+                continue;
+            }
+            if (st.is(net.minecraft.world.item.Items.WATER_BUCKET)) {
+                water = true;
+            }
+            if (st.getItem() instanceof net.minecraft.world.item.BoatItem) {
+                boat = true;
+            }
+        }
+        return new BotPathfinder.Capabilities(water, boat, bot.equipment().blockStock(),
+                BotPathfinder.MAX_SAFE_FALL_PUBLIC);
     }
 
     private void followPath(AICompanionBot bot) {

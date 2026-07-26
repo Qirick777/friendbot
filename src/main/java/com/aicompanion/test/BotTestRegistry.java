@@ -1,5 +1,6 @@
 package com.aicompanion.test;
 
+import com.aicompanion.test.tests.BotAbilityPathTest;
 import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotCatchFallTest;
 import com.aicompanion.test.tests.BotCatchNoneTest;
@@ -133,6 +134,9 @@ public final class BotTestRegistry {
         register("bot_rule_dcell", BotRuleDCellTest::new);
         // T5.2 장비 관리자.
         register("bot_equip", BotEquipTest::new);
+        // T5.1 능력 인식 A*.
+        register("bot_path_ability_water", BotAbilityPathTest.Water::new);
+        register("bot_path_ability_detour", BotAbilityPathTest.Detour::new);
         register("bot_protect_armed", BotProtectArmedTest.Armed::new);
         register("bot_protect_unarmed", BotProtectArmedTest.Unarmed::new);
         register("bot_kite_flip", BotKiteFlipTest::new);
