@@ -3,6 +3,7 @@ package com.aicompanion.test;
 import com.aicompanion.test.tests.BotAbilityPathTest;
 import com.aicompanion.test.tests.BotAliveTest;
 import com.aicompanion.test.tests.BotCatchFallTest;
+import com.aicompanion.test.tests.BotCatchMeetTest;
 import com.aicompanion.test.tests.BotCatchNoneTest;
 import com.aicompanion.test.tests.BotCreeperLowFuseTest;
 import com.aicompanion.test.tests.BotColdStartDistTest;
@@ -15,6 +16,9 @@ import com.aicompanion.test.tests.BotDeathTest;
 import com.aicompanion.test.tests.BotDodgeTest;
 import com.aicompanion.test.tests.BotFallNoWaterTest;
 import com.aicompanion.test.tests.BotFallWaterTest;
+import com.aicompanion.test.tests.BotIdleTest;
+import com.aicompanion.test.tests.BotLivingEatTest;
+import com.aicompanion.test.tests.BotLivingSleepTest;
 import com.aicompanion.test.tests.BotLookTest;
 import com.aicompanion.test.tests.BotMeleeTest;
 import com.aicompanion.test.tests.BotMoveFlatTest;
@@ -119,6 +123,9 @@ public final class BotTestRegistry {
         register("bot_escape_farthreat", BotEscapeFarThreatTest::new);
         register("bot_catch_fall", BotCatchFallTest::new);
         register("bot_catch_none", BotCatchNoneTest::new);
+        // 13.2 C4/C5 — meet-the-fall and the water fallback.
+        register("bot_catch_meet", BotCatchMeetTest.Meet::new);
+        register("bot_catch_water", BotCatchMeetTest.Water::new);
         // T4.6 warden layer-2 data (step-1 probe).
         register("bot_warden_probe", BotWardenProbeTest::new);
         register("bot_speed_probe", BotSpeedProbeTest::new);
@@ -134,6 +141,15 @@ public final class BotTestRegistry {
         register("bot_rule_dcell", BotRuleDCellTest::new);
         // T5.2 장비 관리자.
         register("bot_equip", BotEquipTest::new);
+        // T5.3 생활 기능 (배고픔·수면).
+        register("bot_live_eat", BotLivingEatTest.Safe::new);
+        register("bot_live_eat_combat", BotLivingEatTest.Combat::new);
+        register("bot_live_sleep", BotLivingSleepTest.Bed::new);
+        register("bot_live_sleep_nobed", BotLivingSleepTest.NoBed::new);
+        // T5.4 기본 상태 (배회·추종).
+        register("bot_idle_follow", BotIdleTest.Follow::new);
+        register("bot_idle_follow_hungry", BotIdleTest.Hungry::new);
+        register("bot_idle_wander", BotIdleTest.Wander::new);
         // T5.1 능력 인식 A*.
         register("bot_path_ability_water", BotAbilityPathTest.Water::new);
         register("bot_path_ability_detour", BotAbilityPathTest.Detour::new);

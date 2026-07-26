@@ -35,6 +35,12 @@ public class AICompanionBot extends ServerPlayer {
     /** T5.2 equipment manager — ch.14 「전투 로직과 분리된 상시 백그라운드」. */
     private final com.aicompanion.bot.equip.BotEquipment equipment =
             new com.aicompanion.bot.equip.BotEquipment();
+    /** T5.3 생활 기능 — ch.15 배고픔·수면. Background only; never owns the tick. */
+    private final com.aicompanion.bot.living.BotLiving living =
+            new com.aicompanion.bot.living.BotLiving();
+    /** T5.4 기본 상태 — ch.16 배회·추종. Chooses the idle goal; the planner/mover execute it. */
+    private final com.aicompanion.bot.living.BotIdle idle =
+            new com.aicompanion.bot.living.BotIdle();
     private final com.aicompanion.bot.combat.BotProtection protection =
             new com.aicompanion.bot.combat.BotProtection();
     private final com.aicompanion.bot.combat.BotEnvironment environment =
@@ -73,6 +79,16 @@ public class AICompanionBot extends ServerPlayer {
 
     public com.aicompanion.bot.combat.KiteMonitor kiteMonitor() {
         return kiteMonitor;
+    }
+
+    /** 생활 기능 (T5.3 / ch.15). */
+    public com.aicompanion.bot.living.BotLiving living() {
+        return living;
+    }
+
+    /** 기본 상태 (T5.4 / ch.16). */
+    public com.aicompanion.bot.living.BotIdle idle() {
+        return idle;
     }
 
     public com.aicompanion.bot.combat.BotReflex reflex() {
@@ -128,6 +144,11 @@ public class AICompanionBot extends ServerPlayer {
         // B was never evaluated at all while the bot lost 31.7 HP.
         kiteMonitor.tick(this);
 
+        // 생활 기능 (T5.3 / ch.15): hunger + sleep. Runs BEFORE the equipment manager so that an
+        // eat in progress can veto a weapon swap — vanilla's updatingUsingItem cancels the use the
+        // moment the held stack stops matching useItem, so a swap mid-bite silently eats nothing.
+        living.tick(this);
+
         // Equipment manager (T5.2 / ch.14): background, re-evaluates only on inventory change. Runs
         // above the combat branches so a swap is in hand before any controller uses it this tick.
         equipment.tick(this);
@@ -168,11 +189,19 @@ public class AICompanionBot extends ServerPlayer {
             // the arrow here (before the physics tick) so shootFromRotation reads the aim it wrote.
             rangedCombat.tick(this);
         } else {
+            // 평상시 (T5.4 / ch.16): nothing above claimed the tick, so this is the idle state.
+            // It only chooses the goal — the planner and mover below carry it out, which is why
+            // 「걸어서 따라옴 … 텔레포트 안 함」 holds without any special case.
+            idle.tick(this);
             // Strategic layer: A* planner picks the next node → sets the movement target.
             planner.tick(this);
             // Action layer: set movement inputs before the physics tick consumes them.
             mover.tick(this);
         }
+
+        // 15.1 「포만도 6 이하에서 스프린트 불가」: applied after every branch has set its movement
+        // inputs, so it overrides whichever controller asked to sprint this tick.
+        com.aicompanion.bot.living.BotLiving.applySprintClamp(this);
 
         // ServerPlayer.tick() does only housekeeping; the movement/LivingEntity tick lives in
         // doTick() (normally driven by the network connection). The bot has no connection ticking

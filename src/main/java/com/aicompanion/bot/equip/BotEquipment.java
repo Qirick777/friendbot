@@ -81,6 +81,12 @@ public class BotEquipment {
 
     /** Called every tick; does work only when the inventory changed (ch.14 「인벤토리 변화 시에만」). */
     public void tick(AICompanionBot bot) {
+        // 15.1: an eat in flight owns the main hand. Vanilla's updatingUsingItem cancels the use as
+        // soon as the held stack stops matching useItem, so swapping a weapon in mid-bite would
+        // consume the animation and restore nothing.
+        if (bot.living().isEating()) {
+            return;
+        }
         int fp = fingerprint(bot);
         if (fp == lastFingerprint) {
             return;

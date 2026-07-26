@@ -155,3 +155,75 @@ scenarioSpec. **사유**: 세션 내에서 검증까지 마칠 수 있는 한계
   이후 간격 증가를 판정에 포함. 의도만 재는 것은 유형 #10의 축소판이다.
 - **A''4** `nearestEnemyHasAxe`가 사거리 내 **모든** 적을 검사하도록 수정(이전엔 최근접 하나,
   값 69/220틱). `bot_rule4_axe` `nearestHasAxeTicks:220`으로 확인.
+
+## 블록 D — T5.1 능력 인식 A* 확장 (4.4)
+
+[설계서 재참조] T5.1 구현 스펙: 「능력 스냅샷(물통·보트·흔한블록수) → 하강 규칙(3칸초과+물통→MLG태그,
+대형+보트→보트태그), 상승 규칙(막힘+블록→파일러업태그), 특수이동 비용 페널티.」
+
+| 하니스 | 결과 |
+|---|---|
+| `bot_path_ability_water` | **PASS** `pathLen:15, tookCliff:true, biggestSingleDrop:6, actionTag:water, hp:20.0→20.0` |
+| `bot_path_ability_detour` | **PASS** `pathLen:39, tookCliff:false, biggestSingleDrop:3, actionTag:none` |
+| `bot_path_reach` (회귀) | PASS 3/3, canary OK |
+| `bot_path_blocked` (회귀) | PASS 3/3, canary OK |
+
+**중간 정정 — 유형 #8 (진단값 오라벨), 다섯 번째.** `tookCliff`를 처음엔 **위치**로 쟀다(경로에
+낮고 직선에 가까운 노드가 있는가). 그건 계단 우회 후 아래 선반을 따라 돌아오는 구간에도 참이라,
+39노드짜리 우회를 「절벽을 탔다」로 판정했다. **하강 사건**(한 스텝의 Δy > maxSafeFall)으로 바꾸고
+`biggestSingleDrop`을 함께 실었다. 우회 팔의 최대 단일 하강은 3(=maxSafeFall)이다.
+
+## 블록 E — C4·C5 낙하 폴백 사슬 (13.2, 목표 1)
+
+[설계서 재참조] 13.2 폴백 사슬:
+「ELIF 봇이 근처 + 착지지점 갈 시간 됨 → 마중 나가 받기, 실패 시 아래에 물/블록
+  ELIF 유저에게 물/블록 깔아줄 수 있음 → 착지 지점에 물/블록」
+13.3 재활용: 착지 지점 레이캐스트=R2의 아래 거리 재기, 폴백 실행=구조물 배치기, 신규는 「봇이
+하강선 아래인가」 비교뿐.
+
+구현: `predictLanding()`(하강 레이캐스트), `ticksToFall()`(바닐라 `v'=(v−0.08)×0.98` 반복),
+C4 분기(A* 목표 설정 + 스프린트 + 기존 startRiding 팔로 인계), C5 분기(기존 MLG 실행기 재사용).
+
+**세 번의 FAIL로 드러난 것 — 전부 값이 잡았다.**
+
+1. **하니스 결함.** 첫 실행 `userDamage:0.0, meetTicksToLand:-1`. C4 실패가 아니라 **유저가 애초에
+   떨어지지 않았다** — 연결 없는 가짜 유저는 아무도 틱하지 않는다. `bot_catch_none`과 같은 방식으로
+   `doTick()`+`doCheckFallDamage()`를 하니스가 구동하도록 고치고, 「실제로 떨어졌는가」를 판정
+   전제(`userFell > FALL_HEIGHT−4`)로 명시했다. 20.0→20.0은 무사한 것이 아니라 아무 일도 없었던 것이다.
+2. **`LANDING_SEARCH=40`의 사각.** 두 팔 모두 첫 판정이 `ticksToLand=23`이었다 — 50블록 낙하인데
+   32가 나와야 한다. 원인은 착지 레이캐스트 깊이를 40으로 잘라둔 것. 지면이 40블록 안에 들어와야
+   C4/C5가 보이므로, 그 시점엔 「갈 시간 됨」이 이미 거짓이다. **이 40은 13.2에 근거가 없는 내가
+   정한 수이고, 행동 임계가 아니라 탐색 깊이다.** 월드 바닥까지 훑도록 고쳤다(384 상한).
+3. **A* 목표가 고체 블록이었다.** `[BOT] path unreachable … expansions=0`. `predictLanding`은 유저가
+   **딛을** 블록을 돌려주는데 그걸 그대로 목표로 넣었다. `landing.above()`로 정정.
+   덧붙여 C4 분기가 틱 소유권을 가져가면서 planner/mover를 직접 돌리지 않아 목표만 세우고 서 있었다
+   — **유형 #10을 또 내가 만들었다**. 분기 안에서 `planner().tick()`+`mover().tick()`을 구동한다.
+
+**E4 — `bot_catch_none`의 지위 재판정.** 그 대조는 C4 미구현이라 「어떤 거리든 도달 불가」여서
+성립했다. C4/C5가 생긴 지금은 대조 조건을 명시해야 한다: `botUserHoriz(28.0) > MEET_RANGE(24)`
+**AND** 물통 없음. 셋(C2/C3·C4·C5)이 **각자의 조건으로** 거절되는 상태다. 전제를 판정에 넣어,
+전제가 깨지면 조용히 PASS하지 않고 FAIL하도록 했다.
+
+## 블록 F — T5.3 생활 기능 (배고픔·수면)
+
+[설계서 재참조] T5.3 구현 스펙: 「배고픔 임계 이하→최적 식량 섭취(위험식량 회피, 전투중 억제).
+포만도 6 이하 스프린트 불가. 유저 침대 취침 감지→빈 침대 있으면 봇도 취침, 없으면 옆 바닥 눕는 포즈.
+유저 기상 시 기상.」 15장 원문은 `BotLiving` 클래스 주석에 그대로 인용.
+
+| 하니스 | 결과 |
+|---|---|
+| `bot_live_eat` | **PASS** `food:6→20, gain:14, eaten:cooked_beef, beef:2→0, rotten:3→3, sprintClamped:true` |
+| `bot_live_eat_combat` (반대) | **PASS** `food:6→6, gain:0, eaten:none, beef:2→2` |
+| `bot_live_sleep` | **PASS** `botSleptInBed:true, botSleepingTicks:60, wokeWithUser:true, premiseOk:true` |
+| `bot_live_sleep_nobed` (반대) | **PASS** `botSleptInBed:false, botLayBeside:true, botSleepingTicks:0, wokeWithUser:true` |
+
+- 식량 선택은 이름이 아니라 **점수**로 갈랐다: 썩은 고기 4.8(위험·제외), 황금사과 13.6, 익힌 소고기
+  20.8. 셋을 동시에 주고 소고기만 줄어든 것으로 「포만감·포화도 높은 것 우선 + 위험 식량 회피」를
+  한 번에 측정한다. `rotten:3→3`이 회피의 값 증거다.
+- **전투 중 억제**를 반대 케이스로 분리했다. 같은 배고픔·같은 인벤에서 좀비를 교전 대상으로 붙이면
+  `gain:0`. 이게 없으면 「먹었다」가 무조건 먹는 구현과 구별되지 않는다.
+- 「포만도 6 이하 스프린트 불가」는 **바닐라가 클라이언트에서** 거는 규칙이라 연결 없는 봇에는 걸리지
+  않는다. `BotLiving.applySprintClamp`로 분기 사슬 **뒤에** 적용해야 어떤 컨트롤러가 켠 스프린트든
+  덮는다. 앞에 두면 나중 분기가 다시 켠다.
+- 먹는 중에는 장비 관리자가 손을 못 대게 막았다. 바닐라 `updatingUsingItem`은 든 아이템이
+  `useItem`과 달라지는 즉시 사용을 취소하므로, 한입 중 무기 스왑은 **애니메이션만 먹고 회복 0**이 된다.

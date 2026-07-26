@@ -136,6 +136,24 @@ public class BotEnvironment {
         // F6: 감수 (nothing to deploy).
     }
 
+    /**
+     * Public so the fall-catch chain (ch.13.2 C5) can lay the same column under a falling USER.
+     * 13.3 lists 「물/블록 폴백 | 구조물 배치기」 as a reused part, not a new one.
+     */
+    public void deployWaterColumnAt(ServerLevel level, BlockPos base) {
+        deployWaterColumn(level, base);
+    }
+
+    /** Consume one water bucket from the main inventory; false when none is held. */
+    public boolean consumeWaterFor(AICompanionBot bot) {
+        int wb = findItem(bot, Items.WATER_BUCKET);
+        if (wb < 0) {
+            return false;
+        }
+        consumeWaterBucket(bot, wb);
+        return true;
+    }
+
     private void deployWaterColumn(ServerLevel level, BlockPos base) {
         // Fill an upward column so a high-velocity fall's AABB always overlaps water this tick.
         for (int i = 0; i < WATER_COLUMN; i++) {
